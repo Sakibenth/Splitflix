@@ -141,7 +141,7 @@ if ($groups_result) {
     <!-- Top Nav -->
     <nav class="top-nav">
         <div class="nav-brand">
-            <a href="../index.php" class="nav-brand-link">
+            <a href="../auth/logout.php" class="nav-brand-link">
                 <span class="nav-logo">🎬</span>
                 <span class="nav-title">Splitflix</span>
             </a>
