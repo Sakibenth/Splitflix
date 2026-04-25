@@ -1,0 +1,17 @@
+# Environment & Config
+config/database.php
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Uploads (if any in future)
+uploads/*
+!uploads/.gitkeep
