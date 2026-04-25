@@ -132,6 +132,40 @@ $brand_color = htmlspecialchars($group['brand_color']);
         .status-cleared { border-color: rgba(34, 197, 94, 0.5); color: #4ade80; }
         .status-uncleared { border-color: rgba(239, 68, 68, 0.5); color: #f87171; }
         .empty-members { text-align: center; padding: 4rem 2rem; color: #8888aa; }
+
+        .payment-link-container {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 1.5rem 2rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 2rem;
+        }
+
+        .payment-link-info { flex: 1; }
+        .payment-link-info h3 { font-size: 1.1rem; color: #f0f0f5; margin-bottom: 4px; }
+        .payment-link-info p { font-size: 0.9rem; color: #8888aa; }
+
+        .payment-input-wrapper {
+            display: flex;
+            gap: 12px;
+            flex: 1.5;
+        }
+
+        .payment-input {
+            flex: 1;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: #f0f0f5;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .payment-input:focus { outline: none; border-color: <?php echo $brand_color; ?>; box-shadow: 0 0 0 3px <?php echo $brand_color; ?>15; }
     </style>
 </head>
 <body>
@@ -197,6 +231,20 @@ $brand_color = htmlspecialchars($group['brand_color']);
             <div class="stat-card">
                 <span class="stat-label">Price Per Member</span>
                 <span class="stat-value">৳<?php echo number_format($group['cost_per_member'], 2); ?></span>
+            </div>
+        </div>
+        
+        <!-- Payment Collection Link Section -->
+        <div class="payment-link-container">
+            <div class="payment-link-info">
+                <h3>Payment Collection Link</h3>
+                <p>Add your Google Form link here at the end of the month to collect payments.</p>
+            </div>
+            <div class="payment-input-wrapper">
+                <input type="url" id="payment-link-input" class="payment-input" 
+                       placeholder="https://forms.gle/..." 
+                       value="<?php echo htmlspecialchars($group['payment_form_link'] ?? ''); ?>">
+                <button onclick="savePaymentLink()" class="btn-action">Save Link</button>
             </div>
         </div>
 
@@ -348,6 +396,42 @@ $brand_color = htmlspecialchars($group['brand_color']);
                     toggleEdit();
                 } else alert('Failed: ' + data.error);
             }).finally(() => { btn.textContent = 'Save'; btn.disabled = false; });
+        }
+
+        function savePaymentLink() {
+            const link = document.getElementById('payment-link-input').value;
+            const btn = document.querySelector('.payment-link-container .btn-action');
+            const originalText = btn.textContent;
+            
+            btn.textContent = 'Saving...';
+            btn.disabled = true;
+
+            fetch('update_payment_link.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `group_id=<?php echo $group_id; ?>&payment_link=${encodeURIComponent(link)}`
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    btn.textContent = 'Saved!';
+                    btn.style.background = '#22c55e';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '<?php echo $brand_color; ?>';
+                        btn.disabled = false;
+                    }, 2000);
+                } else {
+                    alert('Failed to save link: ' + (data.error || 'Unknown error'));
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }
+            })
+            .catch(e => {
+                alert('Network error');
+                btn.textContent = originalText;
+                btn.disabled = false;
+            });
         }
 
         function acceptMember(membershipId, btn) {
