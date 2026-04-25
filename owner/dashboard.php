@@ -71,6 +71,13 @@ if ($groups_result) {
             padding: 1.25rem 1.5rem;
             border-radius: 12px;
             position: relative;
+            cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        
+        .group-row:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.2);
         }
         
         .group-info {
@@ -193,7 +200,7 @@ if ($groups_result) {
                 </div>
             <?php else: ?>
                 <?php foreach ($my_groups as $group): ?>
-                <div class="group-row">
+                <a href="group_details.php?group_id=<?php echo $group['group_id']; ?>" class="group-row" style="text-decoration: none; color: inherit;">
                     <div class="group-info">
                         <div class="group-logo" style="color: <?php echo htmlspecialchars($group['brand_color']); ?>">
                             <?php echo getPlatformIcon($group['platform_name']); ?>
@@ -211,7 +218,7 @@ if ($groups_result) {
                             <?php echo htmlspecialchars($group['status']); ?>
                         </span>
                     </div>
-                </div>
+                </a>
                 <?php endforeach; ?>
             <?php endif; ?>
         </div>
