@@ -238,7 +238,6 @@ $brand_color = htmlspecialchars($group['brand_color']);
         <div class="payment-link-container">
             <div class="payment-link-info">
                 <h3>Payment Collection Link</h3>
-                <p>Add your Google Form link here at the end of the month to collect payments.</p>
             </div>
             <div class="payment-input-wrapper">
                 <input type="url" id="payment-link-input" class="payment-input" 
