@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../assets/includes/icons.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../auth/login.php");
@@ -54,10 +55,6 @@ if ($result) {
             <a href="#" class="nav-link">My Groups</a>
             <a href="#" class="nav-link">Payments</a>
         </div>
-        <div class="nav-user">
-            <span class="nav-greeting">Hi, <?php echo htmlspecialchars($_SESSION['name']); ?></span>
-            <a href="../auth/logout.php" class="nav-logout">Sign Out</a>
-        </div>
     </nav>
 
     <main class="dashboard-page">
@@ -81,7 +78,7 @@ if ($result) {
                 <div class="platform-card-glow" style="background: <?php echo htmlspecialchars($color); ?>"></div>
                 <div class="platform-card-content">
                     <div class="platform-logo-area">
-                        <span class="platform-emoji"><?php echo htmlspecialchars($platform['logo_emoji']); ?></span>
+                        <span class="platform-emoji" style="color: <?php echo htmlspecialchars($color); ?>"><?php echo getPlatformIcon($platform['platform_name']); ?></span>
                     </div>
                     <div class="platform-info">
                         <h3><?php echo htmlspecialchars($platform['platform_name']); ?></h3>

@@ -24,10 +24,6 @@ if (!isset($_SESSION['user_id'])) {
             <span class="nav-logo">🎬</span>
             <span class="nav-title">Splitflix</span>
         </div>
-        <div class="nav-user">
-            <span class="nav-greeting">Hi, <?php echo htmlspecialchars($_SESSION['name']); ?></span>
-            <a href="auth/logout.php" class="nav-logout">Sign Out</a>
-        </div>
     </nav>
 
     <!-- Role Selection -->
