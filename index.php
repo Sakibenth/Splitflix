@@ -12,78 +12,85 @@ if (!isset($_SESSION['user_id'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Splitflix Dashboard - Manage your shared subscriptions">
-    <title>Dashboard | Splitflix</title>
+    <meta name="description" content="Splitflix - Choose how you want to use the platform">
+    <title>Choose View | Splitflix</title>
+    <link rel="stylesheet" href="assets/css/dashboard.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #0f0f1a;
-            color: #e0e0e0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .dashboard-placeholder {
-            text-align: center;
-            padding: 3rem;
-        }
-        .dashboard-placeholder h1 {
-            font-size: 2.5rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #e50914, #ff6b6b);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 1rem;
-        }
-        .dashboard-placeholder p {
-            color: #8888aa;
-            font-size: 1.1rem;
-            margin-bottom: 0.5rem;
-        }
-        .dashboard-placeholder .user-info {
-            margin: 2rem 0;
-            padding: 1.5rem 2rem;
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.06);
-            border-radius: 16px;
-            display: inline-block;
-        }
-        .dashboard-placeholder .user-info span {
-            color: #ff6b6b;
-            font-weight: 600;
-        }
-        .btn-logout {
-            display: inline-block;
-            margin-top: 1.5rem;
-            padding: 12px 32px;
-            background: linear-gradient(135deg, #e50914, #b20710);
-            color: #fff;
-            text-decoration: none;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 0.95rem;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .btn-logout:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(229,9,20,0.3);
-        }
-    </style>
 </head>
 <body>
-    <div class="dashboard-placeholder">
-        <h1>🎬 Splitflix</h1>
-        <p>Welcome to your dashboard!</p>
-        <div class="user-info">
-            <p>Logged in as: <span><?php echo htmlspecialchars($_SESSION['name']); ?></span></p>
-            <p>Email: <span><?php echo htmlspecialchars($_SESSION['email']); ?></span></p>
-            <p>Role: <span><?php echo htmlspecialchars(ucfirst($_SESSION['role'])); ?></span></p>
+    <!-- Top Nav -->
+    <nav class="top-nav">
+        <div class="nav-brand">
+            <span class="nav-logo">🎬</span>
+            <span class="nav-title">Splitflix</span>
         </div>
-        <br>
-        <a href="auth/logout.php" class="btn-logout">Sign Out</a>
-    </div>
+        <div class="nav-user">
+            <span class="nav-greeting">Hi, <?php echo htmlspecialchars($_SESSION['name']); ?></span>
+            <a href="auth/logout.php" class="nav-logout">Sign Out</a>
+        </div>
+    </nav>
+
+    <!-- Role Selection -->
+    <main class="role-select-page">
+        <div class="role-header">
+            <h1>How would you like to continue?</h1>
+            <p>Choose your view to get started</p>
+        </div>
+
+        <div class="role-cards">
+            <!-- User Card -->
+            <a href="user/dashboard.php" class="role-card role-user" id="viewAsUser">
+                <div class="role-icon-wrapper">
+                    <div class="role-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                    </div>
+                </div>
+                <h2>View as User</h2>
+                <p>Browse available groups across platforms, request to join, track your subscriptions and payments.</p>
+                <div class="role-features">
+                    <span>🔍 Browse Groups</span>
+                    <span>📋 Join Requests</span>
+                    <span>💳 Payments</span>
+                </div>
+                <div class="role-cta">
+                    <span>Continue as User</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </div>
+            </a>
+
+            <!-- Owner Card -->
+            <a href="owner/dashboard.php" class="role-card role-owner" id="viewAsOwner">
+                <div class="role-icon-wrapper">
+                    <div class="role-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                            <path d="M2 17l10 5 10-5"></path>
+                            <path d="M2 12l10 5 10-5"></path>
+                        </svg>
+                    </div>
+                </div>
+                <h2>View as Owner</h2>
+                <p>Create and manage subscription groups, approve members, track payments and broadcast notifications.</p>
+                <div class="role-features">
+                    <span>➕ Create Groups</span>
+                    <span>✅ Approvals</span>
+                    <span>📊 Revenue</span>
+                </div>
+                <div class="role-cta">
+                    <span>Continue as Owner</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </div>
+            </a>
+        </div>
+    </main>
 </body>
 </html>
