@@ -23,10 +23,9 @@ if ($result) {
 // Fetch owner's existing groups
 $my_groups = [];
 $groups_query = "
-    SELECT sg.*, p.platform_name, p.logo_emoji, p.brand_color, pl.plan_name 
+    SELECT sg.*, p.platform_name, p.logo_emoji, p.brand_color 
     FROM subscription_group sg
     JOIN platforms p ON sg.platform_id = p.platform_id
-    JOIN plans pl ON sg.plan_id = pl.plan_id
     WHERE sg.owner_id = ?
     ORDER BY sg.created_at DESC
 ";
@@ -65,12 +64,13 @@ if ($groups_result) {
         
         .group-row {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: space-between;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.08);
             padding: 1.25rem 1.5rem;
             border-radius: 12px;
+            position: relative;
         }
         
         .group-info {
@@ -99,7 +99,24 @@ if ($groups_result) {
             font-size: 0.85rem;
             color: #8888aa;
         }
+
+        .group-desc {
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.02);
+            border-left: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: #bbbbcc;
+            line-height: 1.4;
+        }
         
+        .group-status-container {
+            position: absolute;
+            top: 1.25rem;
+            right: 1.5rem;
+        }
+
         .group-status {
             padding: 4px 10px;
             border-radius: 20px;
@@ -183,10 +200,13 @@ if ($groups_result) {
                         </div>
                         <div class="group-details">
                             <h4><?php echo htmlspecialchars($group['group_name']); ?></h4>
-                            <p><?php echo htmlspecialchars($group['platform_name']); ?> • <?php echo htmlspecialchars($group['plan_name']); ?> • <?php echo htmlspecialchars($group['seats_remaining']); ?> seats left</p>
+                            <p><?php echo htmlspecialchars($group['platform_name']); ?> • <?php echo htmlspecialchars($group['seats_remaining']); ?> seats left</p>
+                            <div class="group-desc">
+                                <strong>Plan:</strong> <?php echo htmlspecialchars($group['plan_description']); ?>
+                            </div>
                         </div>
                     </div>
-                    <div>
+                    <div class="group-status-container">
                         <span class="group-status status-<?php echo htmlspecialchars($group['status']); ?>">
                             <?php echo htmlspecialchars($group['status']); ?>
                         </span>
