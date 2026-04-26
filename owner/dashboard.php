@@ -10,6 +10,20 @@ if (!isset($_SESSION['user_id'])) {
 
 $owner_id = $_SESSION['user_id'];
 
+// Fetch user's verification status
+$verification_status = 'unverified';
+$user_query = "SELECT verification_status FROM users WHERE user_id = ?";
+$stmt = mysqli_prepare($conn, $user_query);
+if ($stmt) {
+    mysqli_stmt_bind_param($stmt, "i", $owner_id);
+    mysqli_stmt_execute($stmt);
+    $user_result = mysqli_stmt_get_result($stmt);
+    if ($user_result && $row = mysqli_fetch_assoc($user_result)) {
+        $verification_status = $row['verification_status'];
+    }
+    mysqli_stmt_close($stmt);
+}
+
 // Fetch platforms for the "Create Group" panels
 $platforms = [];
 $query = "SELECT * FROM platforms ORDER BY platform_name ASC";
@@ -135,6 +149,91 @@ if ($groups_result) {
         .status-active { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
         .status-paused { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
         .status-closed { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+        .verification-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .verification-card.verified {
+            border-color: rgba(34, 197, 94, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: #22c55e;
+            font-weight: 600;
+        }
+        .verification-card h3 {
+            color: #eab308;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .verification-card p {
+            color: #bbbbcc;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+        .verification-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            align-items: flex-end;
+        }
+        .form-group {
+            flex: 1;
+            min-width: 200px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .form-group label {
+            font-size: 0.85rem;
+            color: #f0f0f5;
+        }
+        .form-group input {
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+            color: white;
+            font-family: inherit;
+        }
+        .btn-verify {
+            background: #eab308;
+            color: #000;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            height: 42px;
+        }
+        .btn-verify:hover {
+            background: #facc15;
+        }
+        .alert-error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            font-size: 0.9rem;
+        }
+        .alert-success {
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
@@ -160,6 +259,38 @@ if ($groups_result) {
                 <p>Create and manage your subscription groups</p>
             </div>
         </div>
+
+        <?php if (isset($_GET['verified']) && $_GET['verified'] == 1): ?>
+            <div class="alert-success">Profile verified successfully!</div>
+        <?php endif; ?>
+
+        <?php if ($verification_status !== 'verified'): ?>
+            <div class="verification-card">
+                <h3>⚠️ Verify Your Identity</h3>
+                <p>To build trust with members and show a verified badge on your groups, please upload a photo of your ID card and provide your phone number.</p>
+                
+                <?php if (isset($_GET['verify_error'])): ?>
+                    <div class="alert-error"><?php echo htmlspecialchars($_GET['verify_error']); ?></div>
+                <?php endif; ?>
+
+                <form action="verify_profile.php" method="POST" enctype="multipart/form-data" class="verification-form">
+                    <div class="form-group">
+                        <label for="phone">Phone Number</label>
+                        <input type="text" id="phone" name="phone" placeholder="+880..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="id_card">ID Card Photo (Max 5MB)</label>
+                        <input type="file" id="id_card" name="id_card" accept=".jpg,.jpeg,.png,.webp" required>
+                    </div>
+                    <button type="submit" class="btn-verify">Submit Verification</button>
+                </form>
+            </div>
+        <?php else: ?>
+            <div class="verification-card verified">
+                <span>✅</span>
+                <span>Your profile is verified. Users will see a trusted badge on your groups.</span>
+            </div>
+        <?php endif; ?>
 
         <h2 class="section-title">Create a New Group</h2>
         <!-- Platform Grid -->

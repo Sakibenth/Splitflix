@@ -66,6 +66,19 @@ mysqli_stmt_close($stmt);
 
 $brand_color = htmlspecialchars($platform['brand_color'] ?? '#e50914');
 $platform_name = htmlspecialchars($platform['platform_name']);
+
+// Fetch verification status
+$verification_status = 'unverified';
+$stmt = mysqli_prepare($conn, "SELECT verification_status FROM users WHERE user_id = ?");
+if ($stmt) {
+    mysqli_stmt_bind_param($stmt, "i", $owner_id);
+    mysqli_stmt_execute($stmt);
+    $user_res = mysqli_stmt_get_result($stmt);
+    if ($user_res && $row = mysqli_fetch_assoc($user_res)) {
+        $verification_status = $row['verification_status'];
+    }
+    mysqli_stmt_close($stmt);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -285,6 +298,42 @@ $platform_name = htmlspecialchars($platform['platform_name']);
         </a>
 
         <div class="form-container">
+            <?php if ($verification_status !== 'verified'): ?>
+            <div class="verification-banner" style="background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.3); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem;">
+                <h3 style="color: #eab308; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">⚠️ Verify Your Identity</h3>
+                <p style="color: #bbbbcc; font-size: 0.9rem; margin-bottom: 1.25rem;">Verify your profile to build trust with members. Unverified owners will be marked as "Unverified" when users browse your group.</p>
+                
+                <?php if (isset($_GET['verify_error'])): ?>
+                    <div class="alert alert-error" style="padding: 10px; margin-bottom: 10px; border-radius: 8px; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); font-size: 0.9rem;">
+                        <?php echo htmlspecialchars($_GET['verify_error']); ?>
+                    </div>
+                <?php endif; ?>
+                
+                <?php if (isset($_GET['verified']) && $_GET['verified'] == 1): ?>
+                    <div class="alert alert-success" style="padding: 10px; margin-bottom: 10px; border-radius: 8px; background: rgba(34, 197, 94, 0.1); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.2); font-size: 0.9rem;">
+                        Profile verified successfully!
+                    </div>
+                <?php else: ?>
+                    <form action="verify_profile.php" method="POST" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <input type="hidden" name="redirect_to" value="create_group.php?platform_id=<?php echo $platform_id; ?>">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="phone" style="font-size: 0.85rem; color: #f0f0f5;">Phone Number</label>
+                            <input type="text" id="phone" name="phone" placeholder="+880..." required style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.2); color: white; font-family: inherit;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="id_card" style="font-size: 0.85rem; color: #f0f0f5;">ID Card Photo (Max 5MB)</label>
+                            <input type="file" id="id_card" name="id_card" accept=".jpg,.jpeg,.png,.webp" required style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.2); color: white; font-family: inherit;">
+                        </div>
+                        <button type="submit" style="background: #eab308; color: #000; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s;">Submit Verification</button>
+                    </form>
+                <?php endif; ?>
+            </div>
+            <?php else: ?>
+                <div class="alert alert-success" style="padding: 1rem; margin-bottom: 1.5rem; border-radius: 8px; background: rgba(34, 197, 94, 0.1); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.2);">
+                    ✅ Profile verified! You will show up as a trusted owner.
+                </div>
+            <?php endif; ?>
+
             <div class="form-header">
                 <h2>Create Group</h2>
                 <p>Set up your subscription sharing rules</p>

@@ -75,11 +75,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Redirect back with status
+    $redirect = $_POST['redirect_to'] ?? 'dashboard.php';
+    // Validate redirect to prevent open redirect
+    if (!in_array(parse_url($redirect, PHP_URL_PATH), ['dashboard.php', 'create_group.php'])) {
+        $redirect = 'dashboard.php';
+    }
+    
+    // Append platform_id if present
+    if (isset($_GET['platform_id'])) {
+        $redirect .= (strpos($redirect, '?') !== false ? '&' : '?') . 'platform_id=' . (int)$_GET['platform_id'];
+    } else if (isset($_POST['redirect_to']) && strpos($_POST['redirect_to'], 'platform_id=') !== false) {
+        $redirect = $_POST['redirect_to'];
+    }
+
     if (!empty($success)) {
-        header("Location: dashboard.php?verified=1");
+        $separator = (strpos($redirect, '?') !== false) ? '&' : '?';
+        header("Location: " . $redirect . $separator . "verified=1");
         exit();
     } else {
-        header("Location: dashboard.php?verify_error=" . urlencode($error));
+        $separator = (strpos($redirect, '?') !== false) ? '&' : '?';
+        header("Location: " . $redirect . $separator . "verify_error=" . urlencode($error));
         exit();
     }
 }
