@@ -190,6 +190,24 @@ mysqli_stmt_close($n_stmt);
         .status-select option { background: #12121a; }
         .status-cleared { border-color: rgba(34, 197, 94, 0.5); color: #4ade80; }
         .status-uncleared { border-color: rgba(239, 68, 68, 0.5); color: #f87171; }
+        
+        .cancel-leave-btn {
+            background: rgba(255, 255, 255, 0.05);
+            color: #ccccee;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .cancel-leave-btn:hover {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
         .empty-members { text-align: center; padding: 4rem 2rem; color: #8888aa; }
 
         /* ---- Feature 6: Notifications ---- */
