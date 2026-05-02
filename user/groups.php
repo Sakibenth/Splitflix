@@ -105,12 +105,19 @@ $brand_color = htmlspecialchars($platform['brand_color'] ?? '#e50914');
         .plan-name { font-weight: 700; color: #fff; margin-bottom: 4px; display: block; }
         .plan-desc { font-size: 0.85rem; color: #8888aa; }
 
-        .group-stats { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
-        .price-tag { font-size: 1.25rem; font-weight: 800; color: #fff; }
-        .price-tag span { font-size: 0.85rem; color: #8888aa; font-weight: 400; }
-        
-        .seats-info { font-size: 0.9rem; color: #ccccee; }
-        .seats-count { font-weight: 700; color: <?php echo $brand_color; ?>; }
+        .group-stats-grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 10px; 
+            background: rgba(255, 255, 255, 0.02); 
+            padding: 12px; 
+            border-radius: 12px; 
+            margin-top: auto; 
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .stat-item { display: flex; flex-direction: column; gap: 4px; }
+        .stat-label { font-size: 0.7rem; color: #8888aa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
+        .stat-val { font-size: 0.95rem; font-weight: 700; color: #fff; }
 
         .btn-join {
             width: 100%;
@@ -174,7 +181,9 @@ $brand_color = htmlspecialchars($platform['brand_color'] ?? '#e50914');
                     </span>
 
                     <div class="owner-info">
-                        <div class="owner-avatar">👤</div>
+                        <div class="owner-avatar" style="background: <?php echo $brand_color; ?>25; color: <?php echo $brand_color; ?>; font-weight: 700;">
+                            <?php echo strtoupper(substr($group['owner_name'], 0, 1)); ?>
+                        </div>
                         <div class="owner-details">
                             <h4>
                                 <?php echo htmlspecialchars($group['owner_name']); ?>
@@ -204,12 +213,18 @@ $brand_color = htmlspecialchars($platform['brand_color'] ?? '#e50914');
                         <?php endif; ?>
                     </div>
 
-                    <div class="group-stats">
-                        <div class="price-tag">
-                            ৳<?php echo number_format($group['cost_per_member'], 0); ?><span>/mo</span>
+                    <div class="group-stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">Join Date</span>
+                            <span class="stat-val"><?php echo $next_join_display; ?></span>
                         </div>
-                        <div class="seats-info">
-                            <span class="seats-count"><?php echo $group['seats_remaining']; ?></span> seats left
+                        <div class="stat-item">
+                            <span class="stat-label">Members</span>
+                            <span class="stat-val"><?php echo ($group['max_members'] - $group['seats_remaining']); ?>/<?php echo $group['max_members']; ?></span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Price/mo</span>
+                            <span class="stat-val" style="color: <?php echo $brand_color; ?>;">৳<?php echo number_format($group['cost_per_member'], 0); ?></span>
                         </div>
                     </div>
 
