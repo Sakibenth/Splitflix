@@ -8,6 +8,20 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+$user_id = $_SESSION['user_id'];
+
+// Verify user exists
+$user_check_stmt = mysqli_prepare($conn, "SELECT user_id FROM users WHERE user_id = ?");
+mysqli_stmt_bind_param($user_check_stmt, "i", $user_id);
+mysqli_stmt_execute($user_check_stmt);
+$user_check_res = mysqli_stmt_get_result($user_check_stmt);
+if (!$user_check_res || mysqli_num_rows($user_check_res) === 0) {
+    mysqli_stmt_close($user_check_stmt);
+    header("Location: ../auth/logout.php");
+    exit();
+}
+mysqli_stmt_close($user_check_stmt);
+
 // Fetch platforms from database
 $platforms = [];
 $query = "SELECT * FROM platforms ORDER BY platform_name ASC";
@@ -52,7 +66,7 @@ if ($result) {
         </div>
         <div class="nav-links">
             <a href="dashboard.php" class="nav-link active">Platforms</a>
-            <a href="#" class="nav-link">My Groups</a>
+            <a href="my_groups.php" class="nav-link">My Subscriptions</a>
             <a href="#" class="nav-link">Payments</a>
         </div>
     </nav>

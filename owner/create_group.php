@@ -11,32 +11,61 @@ if (!isset($_SESSION['user_id'])) {
 $owner_id = $_SESSION['user_id'];
 $platform_id = isset($_GET['platform_id']) ? (int)$_GET['platform_id'] : 0;
 
+// Verify user exists
+$user_check_stmt = mysqli_prepare($conn, "SELECT user_id FROM users WHERE user_id = ?");
+mysqli_stmt_bind_param($user_check_stmt, "i", $owner_id);
+mysqli_stmt_execute($user_check_stmt);
+$user_check_res = mysqli_stmt_get_result($user_check_stmt);
+if (!$user_check_res || mysqli_num_rows($user_check_res) === 0) {
+    mysqli_stmt_close($user_check_stmt);
+    header("Location: ../auth/logout.php");
+    exit();
+}
+mysqli_stmt_close($user_check_stmt);
+
+// Fetch platform info
+$platform = null;
+$stmt = mysqli_prepare($conn, "SELECT * FROM platforms WHERE platform_id = ?");
+mysqli_stmt_bind_param($stmt, "i", $platform_id);
+mysqli_stmt_execute($stmt);
+$res = mysqli_stmt_get_result($stmt);
+if ($res && mysqli_num_rows($res) > 0) {
+    $platform = mysqli_fetch_assoc($res);
+}
+mysqli_stmt_close($stmt);
+
+if (!$platform) {
+    header("Location: dashboard.php");
+    exit();
+}
+
 // Handle Form Submission
 $error = '';
 $success = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $plan_description = trim($_POST['plan_description']);
+    $plan_name = trim($_POST['plan_name']);
     $group_name = trim($_POST['group_name']);
+    $group_description = trim($_POST['group_description']);
     $max_members = (int)$_POST['max_members'];
     $cost_per_member = (float)$_POST['cost_per_member'];
     $validity_start = $_POST['validity_start'];
     $validity_end = $_POST['validity_end'];
 
-    // Basic validation
-    if (empty($group_name) || empty($plan_description) || empty($validity_start) || empty($validity_end) || $max_members < 1) {
+    if (empty($plan_name) || empty($group_name) || empty($validity_start) || empty($validity_end) || $max_members < 1) {
         $error = "Please fill in all required fields.";
     } elseif ($validity_start > $validity_end) {
         $error = "End date must be after the start date.";
     } else {
-        $seats_remaining = $max_members - 1;
+        $seats_remaining = $max_members - 1; // Owner takes 1 seat
+        $plan_id = null; // Catalog removed
 
         $insert_query = "
-            INSERT INTO subscription_group (owner_id, platform_id, plan_description, group_name, max_members, seats_remaining, cost_per_member, validity_start, validity_end, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+            INSERT INTO subscription_group (owner_id, platform_id, plan_id, plan_description, group_description, group_name, max_members, seats_remaining, cost_per_member, validity_start, validity_end, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
         ";
         
         if ($stmt = mysqli_prepare($conn, $insert_query)) {
-            mysqli_stmt_bind_param($stmt, "iissiidss", $owner_id, $platform_id, $plan_description, $group_name, $max_members, $seats_remaining, $cost_per_member, $validity_start, $validity_end);
+            mysqli_stmt_bind_param($stmt, "iiisssiidss", $owner_id, $platform_id, $plan_id, $plan_name, $group_description, $group_name, $max_members, $seats_remaining, $cost_per_member, $validity_start, $validity_end);
             
             if (mysqli_stmt_execute($stmt)) {
                 $success = "Group created successfully!";
@@ -49,20 +78,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
-
-// Fetch platform info
-$platform = null;
-$stmt = mysqli_prepare($conn, "SELECT * FROM platforms WHERE platform_id = ?");
-mysqli_stmt_bind_param($stmt, "i", $platform_id);
-mysqli_stmt_execute($stmt);
-$res = mysqli_stmt_get_result($stmt);
-if ($res && mysqli_num_rows($res) > 0) {
-    $platform = mysqli_fetch_assoc($res);
-} else {
-    header("Location: dashboard.php");
-    exit();
-}
-mysqli_stmt_close($stmt);
 
 $brand_color = htmlspecialchars($platform['brand_color'] ?? '#e50914');
 $platform_name = htmlspecialchars($platform['platform_name']);
@@ -355,12 +370,17 @@ if ($stmt) {
                     
                     <div class="form-group">
                         <label for="group_name">Group Name</label>
-                        <input type="text" id="group_name" name="group_name" class="form-input" placeholder="e.g. <?php echo $platform_name; ?> Premium Share" required>
+                        <input type="text" id="group_name" name="group_name" class="form-input" placeholder="e.g. <?php echo $platform_name; ?> Fans" required>
                     </div>
 
                     <div class="form-group">
-                        <label for="plan_description">Plan Description (Viewable by Members)</label>
-                        <textarea id="plan_description" name="plan_description" class="form-input" placeholder="e.g. 4K HDR Premium Plan, auto-renews monthly" required></textarea>
+                        <label for="plan_name">Plan Name/Type</label>
+                        <input type="text" id="plan_name" name="plan_name" class="form-input" placeholder="e.g. Premium 4K, Basic with Ads..." required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="group_description">Group Description</label>
+                        <textarea id="group_description" name="group_description" class="form-input" placeholder="e.g. Friendly group, auto-renews, immediate access after payment..." required></textarea>
                     </div>
 
                     <div class="form-row">

@@ -10,19 +10,18 @@ if (!isset($_SESSION['user_id'])) {
 
 $owner_id = $_SESSION['user_id'];
 
-// Fetch user's verification status
-$verification_status = 'unverified';
-$user_query = "SELECT verification_status FROM users WHERE user_id = ?";
-$stmt = mysqli_prepare($conn, $user_query);
-if ($stmt) {
-    mysqli_stmt_bind_param($stmt, "i", $owner_id);
-    mysqli_stmt_execute($stmt);
-    $user_result = mysqli_stmt_get_result($stmt);
-    if ($user_result && $row = mysqli_fetch_assoc($user_result)) {
-        $verification_status = $row['verification_status'];
-    }
-    mysqli_stmt_close($stmt);
+// Verify user exists
+$user_check_stmt = mysqli_prepare($conn, "SELECT user_id, verification_status FROM users WHERE user_id = ?");
+mysqli_stmt_bind_param($user_check_stmt, "i", $owner_id);
+mysqli_stmt_execute($user_check_stmt);
+$user_check_res = mysqli_stmt_get_result($user_check_stmt);
+if (!$user_check_res || !$user_row = mysqli_fetch_assoc($user_check_res)) {
+    mysqli_stmt_close($user_check_stmt);
+    header("Location: ../auth/logout.php");
+    exit();
 }
+$verification_status = $user_row['verification_status'];
+mysqli_stmt_close($user_check_stmt);
 
 // Fetch platforms for the "Create Group" panels
 $platforms = [];
