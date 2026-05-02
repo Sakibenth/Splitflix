@@ -1,6 +1,4 @@
--- ========================================
--- Feature 6: Group Notifications
--- ========================================
+
 CREATE TABLE IF NOT EXISTS group_notifications (
     notification_id INT AUTO_INCREMENT PRIMARY KEY,
     group_id INT NOT NULL,
@@ -11,9 +9,7 @@ CREATE TABLE IF NOT EXISTS group_notifications (
     FOREIGN KEY (owner_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ========================================
--- Feature 7: Movie Recommendations
--- ========================================
+
 CREATE TABLE IF NOT EXISTS movie_recommendations (
     recommendation_id INT AUTO_INCREMENT PRIMARY KEY,
     group_id INT NOT NULL,
