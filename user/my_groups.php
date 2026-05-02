@@ -67,6 +67,32 @@ while ($row = mysqli_fetch_assoc($waitlist_res)) {
     $my_waitlist[] = $row;
 }
 mysqli_stmt_close($stmt);
+
+// tanvir muhtady Feature 6,7:  notifications and recommendations 
+$group_notifs = [];
+$group_recs   = [];
+foreach ($my_groups as $g) {
+    if ($g['my_role'] !== 'member') continue;
+    $gid = (int)$g['group_id'];
+
+    // Notifications
+    $ns = mysqli_prepare($conn, "SELECT notification_id, message, created_at FROM group_notifications WHERE group_id = ? ORDER BY created_at DESC");
+    mysqli_stmt_bind_param($ns, "i", $gid);
+    mysqli_stmt_execute($ns);
+    $nr = mysqli_stmt_get_result($ns);
+    $group_notifs[$gid] = [];
+    while ($row = mysqli_fetch_assoc($nr)) $group_notifs[$gid][] = $row;
+    mysqli_stmt_close($ns);
+
+    // Recommendations
+    $rs = mysqli_prepare($conn, "SELECT mr.recommendation_id, mr.title, mr.genre, mr.description, mr.platform_hint, mr.created_at, mr.recommended_by, u.name as recommender_name FROM movie_recommendations mr JOIN users u ON mr.recommended_by = u.user_id WHERE mr.group_id = ? ORDER BY mr.created_at DESC");
+    mysqli_stmt_bind_param($rs, "i", $gid);
+    mysqli_stmt_execute($rs);
+    $rr = mysqli_stmt_get_result($rs);
+    $group_recs[$gid] = [];
+    while ($row = mysqli_fetch_assoc($rr)) $group_recs[$gid][] = $row;
+    mysqli_stmt_close($rs);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -168,6 +194,49 @@ mysqli_stmt_close($stmt);
             border: 1px solid rgba(239, 68, 68, 0.2);
         }
         .btn-submit { width: 100%; padding: 12px; background: #eab308; color: #000; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; }
+
+        /* ---- Feature 6 & 7: Tabs inside subscription card ---- */
+        .card-tabs { border-top: 1px solid rgba(255,255,255,0.06); padding-top: 1.2rem; }
+        .tab-row { display: flex; gap: 6px; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 0; }
+        .tab-btn { padding: 8px 18px; font-size: 0.85rem; font-weight: 600; color: #8888aa; background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.2s; }
+        .tab-btn:hover { color: #ccccee; }
+        .tab-btn.active { color: #f0f0f5; border-bottom-color: #e50914; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+
+        /* Notification cards (member read-only) */
+        .notif-item { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-left: 3px solid var(--brand); border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 10px; }
+        .notif-item p { color: #d0d0e0; font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; margin: 0; }
+        .notif-item-meta { font-size: 0.78rem; color: #8888aa; margin-top: 6px; }
+        .notif-empty-msg { color: #8888aa; font-size: 0.88rem; padding: 1rem 0; text-align: center; }
+
+        /* Recommendation form + cards */
+        .rec-form { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 1.2rem; margin-bottom: 1.2rem; }
+        .rec-form h4 { font-size: 0.9rem; font-weight: 600; color: #f0f0f5; margin-bottom: 1rem; }
+        .rec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .rec-field { display: flex; flex-direction: column; gap: 5px; }
+        .rec-field label { font-size: 0.78rem; font-weight: 600; color: #8888aa; text-transform: uppercase; letter-spacing: 0.4px; }
+        .rec-field input, .rec-field select, .rec-field textarea { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; color: #f0f0f5; padding: 9px 12px; font-size: 0.88rem; font-family: inherit; transition: border-color 0.2s; }
+        .rec-field input:focus, .rec-field select:focus, .rec-field textarea:focus { outline: none; border-color: #e50914; }
+        .rec-field textarea { resize: vertical; min-height: 60px; }
+        .rec-field select option { background: #12121a; }
+        .btn-rec-submit { background: #e50914; color: #fff; border: none; padding: 9px 20px; border-radius: 7px; font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: filter 0.2s; }
+        .btn-rec-submit:hover { filter: brightness(1.1); }
+        .btn-rec-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+        .rec-alert { padding: 8px 12px; border-radius: 7px; font-size: 0.85rem; font-weight: 500; margin-bottom: 10px; display: none; }
+        .rec-alert-success { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
+        .rec-alert-error { background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+
+        .rec-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 10px; display: flex; gap: 0.9rem; align-items: flex-start; }
+        .rec-card.mine { border-left: 3px solid #e50914; }
+        .rec-card-icon { font-size: 1.6rem; flex-shrink: 0; }
+        .rec-card-body .rec-title { font-size: 0.95rem; font-weight: 700; color: #f0f0f5; margin-bottom: 4px; }
+        .rec-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+        .badge-pill { font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+        .badge-genre { background: rgba(255,255,255,0.08); color: #ccccee; }
+        .badge-platform { background: rgba(229,9,20,0.1); color: #ff6b6b; }
+        .rec-card-body .rec-desc { font-size: 0.85rem; color: #9999bb; line-height: 1.4; }
+        .rec-card-body .rec-meta { font-size: 0.76rem; color: #8888aa; margin-top: 6px; }
     </style>
 </head>
 <body>
@@ -254,6 +323,90 @@ mysqli_stmt_close($stmt);
                             </button>
                         <?php endif; ?>
                     </div>
+
+                    <?php if ($group['my_role'] === 'member'):
+                        $gid   = (int)$group['group_id'];
+                        $brand = htmlspecialchars($group['brand_color']);
+                        $notifs_for_group = $group_notifs[$gid] ?? [];
+                        $recs_for_group   = $group_recs[$gid] ?? [];
+                    ?>
+                    <!-- Feature 6 & 7: Tabs -->
+                    <div class="card-tabs" style="--brand: <?php echo $brand; ?>">
+                        <div class="tab-row">
+                            <button class="tab-btn active" onclick="switchCardTab(<?php echo $gid; ?>, 'notif', this)">📢 Notifications</button>
+                            <button class="tab-btn" onclick="switchCardTab(<?php echo $gid; ?>, 'rec', this)">🎬 Recommendations</button>
+                        </div>
+
+                        <!-- Notifications pane -->
+                        <div class="tab-pane active" id="ctab-notif-<?php echo $gid; ?>">
+                            <?php if (empty($notifs_for_group)): ?>
+                                <div class="notif-empty-msg">No notifications from your group owner yet.</div>
+                            <?php else: ?>
+                                <?php foreach ($notifs_for_group as $n): ?>
+                                <div class="notif-item" style="--brand: <?php echo $brand; ?>">
+                                    <p><?php echo nl2br(htmlspecialchars($n['message'])); ?></p>
+                                    <div class="notif-item-meta">🕐 <?php echo date('M d, Y g:i A', strtotime($n['created_at'])); ?></div>
+                                </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Recommendations pane -->
+                        <div class="tab-pane" id="ctab-rec-<?php echo $gid; ?>">
+                            <!-- Post form -->
+                            <div class="rec-form">
+                                <h4>➕ Recommend a Movie / Show</h4>
+                                <div id="rec-alert-<?php echo $gid; ?>" class="rec-alert"></div>
+                                <div class="rec-grid">
+                                    <div class="rec-field">
+                                        <label>Title *</label>
+                                        <input type="text" id="rt-<?php echo $gid; ?>" placeholder="movie na khuje porte bosh">
+                                    </div>
+                                    <div class="rec-field">
+                                        <label>Genre</label>
+                                        <select id="rg-<?php echo $gid; ?>">
+                                            <option value="">— Select —</option>
+                                            <option>Action</option><option>Comedy</option><option>Drama</option>
+                                            <option>Horror</option><option>Sci-Fi</option><option>Thriller</option>
+                                            <option>Romance</option><option>Documentary</option><option>Animation</option><option>Other</option>
+                                        </select>
+                                    </div>
+                                    <div class="rec-field">
+                                        <label>Available On</label>
+                                        <input type="text" id="rp-<?php echo $gid; ?>" placeholder="torrentbd">
+                                    </div>
+                                    <div class="rec-field">
+                                        <label>Why watch it?</label>
+                                        <textarea id="rd-<?php echo $gid; ?>" placeholder="netflix niye bhab barse?"></textarea>
+                                    </div>
+                                </div>
+                                <button class="btn-rec-submit" onclick="postRec(<?php echo $gid; ?>)">Post Recommendation</button>
+                            </div>
+
+                            <!-- Recommendations list -->
+                            <div id="rec-list-<?php echo $gid; ?>">
+                                <?php if (empty($recs_for_group)): ?>
+                                    <div class="notif-empty-msg" id="rec-empty-<?php echo $gid; ?>">No recommendations yet. Be the first!</div>
+                                <?php else: ?>
+                                    <?php foreach ($recs_for_group as $r): ?>
+                                    <div class="rec-card <?php echo $r['recommended_by'] == $user_id ? 'mine' : ''; ?>">
+                                        <span class="rec-card-icon">🎬</span>
+                                        <div class="rec-card-body">
+                                            <div class="rec-title"><?php echo htmlspecialchars($r['title']); ?></div>
+                                            <div class="rec-badges">
+                                                <?php if ($r['genre']): ?><span class="badge-pill badge-genre"><?php echo htmlspecialchars($r['genre']); ?></span><?php endif; ?>
+                                                <?php if ($r['platform_hint']): ?><span class="badge-pill badge-platform">📺 <?php echo htmlspecialchars($r['platform_hint']); ?></span><?php endif; ?>
+                                            </div>
+                                            <?php if ($r['description']): ?><div class="rec-desc"><?php echo nl2br(htmlspecialchars($r['description'])); ?></div><?php endif; ?>
+                                            <div class="rec-meta">By <strong><?php echo htmlspecialchars($r['recommender_name']); ?></strong> · <?php echo date('M d, Y', strtotime($r['created_at'])); ?><?php echo $r['recommended_by'] == $user_id ? ' <em>(you)</em>' : ''; ?></div>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                 </div>
             <?php endforeach; ?>
         <?php endif; ?>
@@ -319,6 +472,74 @@ mysqli_stmt_close($stmt);
         // Close on outside click
         window.onclick = function(event) {
             if (event.target == document.getElementById('reviewModal')) closeReviewModal();
+        }
+
+        // ---- Feature 6 & 7: Tab switching ----
+        function switchCardTab(gid, tab, btn) {
+            const card = btn.closest('.card-tabs');
+            card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            card.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('ctab-' + tab + '-' + gid).classList.add('active');
+        }
+
+        function showRecAlert(gid, msg, type) {
+            const el = document.getElementById('rec-alert-' + gid);
+            el.className = 'rec-alert rec-alert-' + type;
+            el.textContent = msg;
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 4000);
+        }
+
+        function postRec(gid) {
+            const title    = document.getElementById('rt-' + gid).value.trim();
+            const genre    = document.getElementById('rg-' + gid).value;
+            const platform = document.getElementById('rp-' + gid).value.trim();
+            const desc     = document.getElementById('rd-' + gid).value.trim();
+            if (!title) { showRecAlert(gid, 'Please enter a title.', 'error'); return; }
+            const btn = event.target;
+            btn.textContent = 'Posting...';
+            btn.disabled = true;
+            fetch('add_recommendation.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `group_id=${gid}&title=${encodeURIComponent(title)}&genre=${encodeURIComponent(genre)}&platform_hint=${encodeURIComponent(platform)}&description=${encodeURIComponent(desc)}`
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showRecAlert(gid, '✅ Recommendation posted!', 'success');
+                    const list = document.getElementById('rec-list-' + gid);
+                    const empty = document.getElementById('rec-empty-' + gid);
+                    if (empty) empty.remove();
+                    const card = document.createElement('div');
+                    card.className = 'rec-card mine';
+                    card.innerHTML = `
+                        <span class="rec-card-icon">🎬</span>
+                        <div class="rec-card-body">
+                            <div class="rec-title">${escHtml(title)}</div>
+                            <div class="rec-badges">
+                                ${genre ? `<span class="badge-pill badge-genre">${escHtml(genre)}</span>` : ''}
+                                ${platform ? `<span class="badge-pill badge-platform">📺 ${escHtml(platform)}</span>` : ''}
+                            </div>
+                            ${desc ? `<div class="rec-desc">${escHtml(desc)}</div>` : ''}
+                            <div class="rec-meta">By <strong>You</strong> · Just now</div>
+                        </div>`;
+                    list.prepend(card);
+                    document.getElementById('rt-' + gid).value = '';
+                    document.getElementById('rg-' + gid).value = '';
+                    document.getElementById('rp-' + gid).value = '';
+                    document.getElementById('rd-' + gid).value = '';
+                } else {
+                    showRecAlert(gid, data.error || 'Failed to post.', 'error');
+                }
+            })
+            .catch(() => showRecAlert(gid, 'Network error.', 'error'))
+            .finally(() => { btn.textContent = 'Post Recommendation'; btn.disabled = false; });
+        }
+
+        function escHtml(s) {
+            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
     </script>
 </body>

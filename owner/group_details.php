@@ -107,6 +107,22 @@ if (!$is_billing_day) {
 }
 
 $brand_color = htmlspecialchars($group['brand_color']);
+
+// Feature 6: Fetch existing notifications for this group
+$notifs = [];
+$n_stmt = mysqli_prepare($conn, "
+    SELECT notification_id, message, created_at
+    FROM group_notifications
+    WHERE group_id = ?
+    ORDER BY created_at DESC
+");
+mysqli_stmt_bind_param($n_stmt, "i", $group_id);
+mysqli_stmt_execute($n_stmt);
+$n_res = mysqli_stmt_get_result($n_stmt);
+while ($row = mysqli_fetch_assoc($n_res)) {
+    $notifs[] = $row;
+}
+mysqli_stmt_close($n_stmt);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -176,7 +192,24 @@ $brand_color = htmlspecialchars($group['brand_color']);
         .status-uncleared { border-color: rgba(239, 68, 68, 0.5); color: #f87171; }
         .empty-members { text-align: center; padding: 4rem 2rem; color: #8888aa; }
 
-        .leaving-date-badge {
+        /* ---- Feature 6: Notifications ---- */
+        .notif-section { margin-top: 3rem; }
+        .notif-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .notif-section-header h2 { font-size: 1.25rem; color: #f0f0f5; }
+        .notif-compose { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .notif-compose label { display: block; font-size: 0.82rem; font-weight: 600; color: #8888aa; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
+        .notif-compose textarea { width: 100%; min-height: 90px; padding: 12px 14px; resize: vertical; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #f0f0f5; font-family: inherit; font-size: 0.95rem; transition: border-color 0.2s; margin-bottom: 12px; box-sizing: border-box; }
+        .notif-compose textarea:focus { outline: none; border-color: <?php echo $brand_color; ?>; box-shadow: 0 0 0 3px <?php echo $brand_color; ?>15; }
+        .notif-list { display: flex; flex-direction: column; gap: 12px; }
+        .notif-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-left: 4px solid <?php echo $brand_color; ?>; border-radius: 10px; padding: 1rem 1.2rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+        .notif-card-body p { color: #d0d0e0; font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; margin: 0; }
+        .notif-card-meta { font-size: 0.8rem; color: #8888aa; margin-top: 8px; }
+        .notif-delete-btn { background: none; border: none; color: #8888aa; font-size: 0.85rem; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: all 0.2s; flex-shrink: 0; }
+        .notif-delete-btn:hover { background: rgba(239,68,68,0.1); color: #f87171; }
+        .notif-empty { text-align: center; padding: 2rem; color: #8888aa; font-size: 0.9rem; }
+        .notif-alert { padding: 10px 14px; border-radius: 8px; font-size: 0.88rem; font-weight: 500; margin-bottom: 10px; display: none; }
+        .notif-alert-success { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
+        .notif-alert-error { background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
             display: inline-flex; align-items: center; gap: 6px;
             background: rgba(239, 68, 68, 0.1); color: #f87171;
             padding: 5px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600;
@@ -509,6 +542,33 @@ $brand_color = htmlspecialchars($group['brand_color']);
                 </table>
             <?php endif; ?>
         </div>
+        <!-- tanvir muhtady feature 6 notification -->
+        <div class="notif-section">
+            <div class="notif-section-header">
+                <h2>📢 Group Notifications</h2>
+            </div>
+            <div class="notif-compose">
+                <label>Broadcast a message to your group members</label>
+                <div id="notif-alert" class="notif-alert"></div>
+                <textarea id="notif-message" placeholder="e.g. time moton taka na dile rog kata hobe"></textarea>
+                <button class="btn-action" onclick="postNotification()">📣 Post Notification</button>
+            </div>
+            <div class="notif-list" id="notif-list">
+                <?php if (empty($notifs)): ?>
+                    <div class="notif-empty" id="notif-empty-state">No notifications posted yet. Members will see your messages here.</div>
+                <?php else: ?>
+                    <?php foreach ($notifs as $n): ?>
+                    <div class="notif-card" id="notif-<?php echo $n['notification_id']; ?>">
+                        <div class="notif-card-body">
+                            <p><?php echo nl2br(htmlspecialchars($n['message'])); ?></p>
+                            <div class="notif-card-meta">🕐 <?php echo date('M d, Y g:i A', strtotime($n['created_at'])); ?></div>
+                        </div>
+                        <button class="notif-delete-btn" onclick="deleteNotification(<?php echo $n['notification_id']; ?>)">🗑 Delete</button>
+                    </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
     </main>
 
     <!-- Owner Review Modal -->
@@ -701,6 +761,77 @@ $brand_color = htmlspecialchars($group['brand_color']);
         // Close modal on outside click
         window.onclick = function(event) {
             if (event.target == document.getElementById('ownerReviewModal')) closeOwnerReviewModal();
+        }
+
+        // tanvir muhtady Feature 6: Notifications 
+        function showNotifAlert(msg, type) {
+            const el = document.getElementById('notif-alert');
+            el.className = 'notif-alert notif-alert-' + type;
+            el.textContent = msg;
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 4000);
+        }
+
+        function postNotification() {
+            const msg = document.getElementById('notif-message').value.trim();
+            if (!msg) { showNotifAlert('Please write a message before posting.', 'error'); return; }
+            const btn = event.target;
+            btn.textContent = 'Posting...';
+            btn.disabled = true;
+            fetch('post_notification.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `group_id=<?php echo $group_id; ?>&message=${encodeURIComponent(msg)}`
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotifAlert('✅ Notification posted! Members can now see it.', 'success');
+                    document.getElementById('notif-message').value = '';
+                    const empty = document.getElementById('notif-empty-state');
+                    if (empty) empty.remove();
+                    const list = document.getElementById('notif-list');
+                    const card = document.createElement('div');
+                    card.className = 'notif-card';
+                    card.id = 'notif-' + data.notification_id;
+                    card.innerHTML = `
+                        <div class="notif-card-body">
+                            <p>${escHtml(msg).replace(/\n/g,'<br>')}</p>
+                            <div class="notif-card-meta">🕐 ${data.created_at}</div>
+                        </div>
+                        <button class="notif-delete-btn" onclick="deleteNotification(${data.notification_id})">🗑 Delete</button>`;
+                    list.prepend(card);
+                } else {
+                    showNotifAlert(data.error || 'Failed to post notification.', 'error');
+                }
+            })
+            .catch(() => showNotifAlert('Network error.', 'error'))
+            .finally(() => { btn.textContent = '📣 Post Notification'; btn.disabled = false; });
+        }
+
+        function deleteNotification(id) {
+            if (!confirm('Delete this notification? Members will no longer see it.')) return;
+            fetch('delete_notification.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `notification_id=${id}`
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('notif-' + id).remove();
+                    const list = document.getElementById('notif-list');
+                    if (list.children.length === 0) {
+                        list.innerHTML = '<div class="notif-empty" id="notif-empty-state">No notifications posted yet.</div>';
+                    }
+                } else {
+                    alert('Failed to delete: ' + (data.error || 'Unknown'));
+                }
+            });
+        }
+
+        function escHtml(s) {
+            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
     </script>
 </body>
