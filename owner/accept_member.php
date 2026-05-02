@@ -48,7 +48,7 @@ if ($group['owner_id'] !== $owner_id) {
     exit();
 }
 
-if ($group['active_count'] >= $group['max_members']) {
+if (($group['active_count'] + 1) >= $group['max_members']) {
     echo json_encode(['success' => false, 'error' => 'Group is already full']);
     exit();
 }

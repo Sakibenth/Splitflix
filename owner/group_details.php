@@ -18,9 +18,10 @@ if (!$group_id) {
 
 // Fetch Group Details
 $group_query = "
-    SELECT sg.*, p.platform_name, p.logo_emoji, p.brand_color 
+    SELECT sg.*, p.platform_name, p.logo_emoji, p.brand_color, u.name as owner_name, u.email as owner_email, u.phone as owner_phone
     FROM subscription_group sg
     JOIN platforms p ON sg.platform_id = p.platform_id
+    JOIN users u ON sg.owner_id = u.user_id
     WHERE sg.group_id = ? AND sg.owner_id = ?
 ";
 $stmt = mysqli_prepare($conn, $group_query);
@@ -60,7 +61,7 @@ if ($members_res) {
 }
 mysqli_stmt_close($stmt);
 
-$total_joined = count($active_members);
+$total_joined = count($active_members) + 1; // Including owner
 $total_allowed = $group['max_members'];
 $is_accepting = $total_joined < $total_allowed;
 $brand_color = htmlspecialchars($group['brand_color']);
@@ -270,6 +271,26 @@ $brand_color = htmlspecialchars($group['brand_color']);
                         </tr>
                     </thead>
                     <tbody>
+                        <!-- Owner Row -->
+                        <tr style="background: rgba(255, 255, 255, 0.03);">
+                            <td>
+                                <div style="font-weight: 600;"><?php echo htmlspecialchars($group['owner_name']); ?></div>
+                                <div class="member-meta" style="color: <?php echo $brand_color; ?>; font-weight: 700;">OWNER</div>
+                            </td>
+                            <td>
+                                <div><?php echo htmlspecialchars($group['owner_email']); ?></div>
+                                <?php if (!empty($group['owner_phone'])): ?>
+                                    <div class="member-meta">📞 <?php echo htmlspecialchars($group['owner_phone']); ?></div>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php echo date('M d, Y', strtotime($group['created_at'])); ?>
+                            </td>
+                            <td>
+                                <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff;">N/A (Group Owner)</span>
+                            </td>
+                        </tr>
+
                         <?php foreach ($active_members as $member): ?>
                             <tr>
                                 <td>

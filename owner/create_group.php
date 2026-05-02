@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($validity_start > $validity_end) {
         $error = "End date must be after the start date.";
     } else {
-        $seats_remaining = $max_members;
+        $seats_remaining = $max_members - 1;
 
         $insert_query = "
             INSERT INTO subscription_group (owner_id, platform_id, plan_description, group_name, max_members, seats_remaining, cost_per_member, validity_start, validity_end, status) 
