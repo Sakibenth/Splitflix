@@ -1,4 +1,4 @@
--- Splitflix Full Database Setup (consolidated)
+-- Splitflix Full Database Setup
 -- Run this to recreate the entire database from scratch
 
 CREATE DATABASE IF NOT EXISTS splitflix;
