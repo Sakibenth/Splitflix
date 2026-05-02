@@ -16,6 +16,7 @@ $query = "
            u.name as owner_name, u.email as owner_email, u.phone as owner_phone, u.user_id as owner_id,
            p.platform_name, p.logo_emoji, p.brand_color,
            'member' as my_role,
+           gm.payment_status,
            (SELECT review_id FROM reviews WHERE group_id = sg.group_id AND reviewer_id = ? AND reviewer_role = 'member') as my_review_id
     FROM group_members gm
     JOIN subscription_group sg ON gm.group_id = sg.group_id
@@ -29,6 +30,7 @@ $query = "
            'Me' as owner_name, 'Me' as owner_email, 'Me' as owner_phone, sg.owner_id,
            p.platform_name, p.logo_emoji, p.brand_color,
            'owner' as my_role,
+           NULL as payment_status,
            NULL as my_review_id
     FROM subscription_group sg
     JOIN platforms p ON sg.platform_id = p.platform_id
@@ -98,6 +100,26 @@ mysqli_stmt_close($stmt);
         .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85rem; }
         .contact-item { display: flex; align-items: center; gap: 6px; color: #8888aa; }
         .contact-item b { color: #fff; }
+
+        .payment-section { display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.15); padding: 1rem 1.25rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); }
+        .payment-section .label { font-size: 0.85rem; color: #8888aa; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .btn-pay {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #000; font-weight: 700; font-size: 0.9rem;
+            padding: 10px 22px; border-radius: 10px; text-decoration: none;
+            border: none; cursor: pointer;
+            transition: filter 0.2s, transform 0.15s;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+        }
+        .btn-pay:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .badge-paid {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(34, 197, 94, 0.12);
+            color: #22c55e; font-weight: 700; font-size: 0.9rem;
+            padding: 8px 18px; border-radius: 10px;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
 
         .review-section { border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1.25rem; }
         .btn-review { 
@@ -183,6 +205,22 @@ mysqli_stmt_close($stmt);
                             <div class="contact-item">Phone: <b><?php echo htmlspecialchars($group['owner_phone'] ?: 'N/A'); ?></b></div>
                         </div>
                     </div>
+
+                    <?php if ($group['my_role'] === 'member'): ?>
+                    <div class="payment-section">
+                        <div>
+                            <div class="label">💳 Monthly Payment</div>
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #fff; margin-top: 4px;">৳<?php echo number_format($group['cost_per_member'], 0); ?><span style="font-size: 0.8rem; color: #8888aa; font-weight: 400;">/mo</span></div>
+                        </div>
+                        <?php if ($group['payment_status'] === 'cleared'): ?>
+                            <span class="badge-paid">✅ Paid</span>
+                        <?php else: ?>
+                            <a href="../payments/checkout.php?group_id=<?php echo $group['group_id']; ?>" class="btn-pay">
+                                💳 Pay Now
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
 
                     <div class="review-section">
                         <?php if ($group['my_role'] === 'owner'): ?>
