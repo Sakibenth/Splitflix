@@ -213,6 +213,7 @@ mysqli_stmt_close($stmt);
                         </div>
                     </div>
 
+                    <?php if ($group['my_role'] === 'member'): ?>
                     <div class="owner-contact">
                         <h4>Contact Group Owner</h4>
                         <div class="contact-grid">
@@ -221,22 +222,9 @@ mysqli_stmt_close($stmt);
                             <div class="contact-item">Phone: <b><?php echo htmlspecialchars($group['owner_phone'] ?: 'N/A'); ?></b></div>
                         </div>
                     </div>
-
-                    <?php if ($group['my_role'] === 'member'): ?>
-                    <div class="payment-section">
-                        <div>
-                            <div class="label">💳 Monthly Payment</div>
-                            <div style="font-size: 1.1rem; font-weight: 700; color: #fff; margin-top: 4px;">৳<?php echo number_format($group['cost_per_member'], 0); ?><span style="font-size: 0.8rem; color: #8888aa; font-weight: 400;">/mo</span></div>
-                        </div>
-                        <?php if ($group['payment_status'] === 'cleared'): ?>
-                            <span class="badge-paid">✅ Paid</span>
-                        <?php else: ?>
-                            <a href="../payments/checkout.php?group_id=<?php echo $group['group_id']; ?>" class="btn-pay">
-                                💳 Pay Now
-                            </a>
-                        <?php endif; ?>
-                    </div>
                     <?php endif; ?>
+
+
 
                     <?php if ($group['my_role'] === 'member'): ?>
                     <div style="display: flex; justify-content: flex-end;">
