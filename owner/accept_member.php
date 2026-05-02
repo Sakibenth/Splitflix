@@ -25,7 +25,7 @@ if (!$membership_id || !$group_id) {
 
 // 1. Verify ownership and check if group has space
 $verify_query = "
-    SELECT sg.owner_id, sg.max_members, sg.seats_remaining, 
+    SELECT sg.owner_id, sg.max_members, sg.seats_remaining, sg.validity_start,
            (SELECT COUNT(*) FROM group_members WHERE group_id = sg.group_id AND membership_status = 'active') as active_count
     FROM subscription_group sg
     WHERE sg.group_id = ?
@@ -50,6 +50,13 @@ if ($group['owner_id'] !== $owner_id) {
 
 if (($group['active_count'] + 1) >= $group['max_members']) {
     echo json_encode(['success' => false, 'error' => 'Group is already full']);
+    exit();
+}
+
+$billing_day = (int) date('j', strtotime($group['validity_start']));
+$today_day   = (int) date('j');
+if ($billing_day !== $today_day) {
+    echo json_encode(['success' => false, 'error' => 'Can only accept members on the billing date']);
     exit();
 }
 

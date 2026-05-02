@@ -167,23 +167,6 @@ $brand_color = htmlspecialchars($platform['brand_color'] ?? '#e50914');
                 <?php foreach ($groups as $group): 
                     $is_full = $group['seats_remaining'] <= 0;
                     $rating = $group['owner_rating'] ? round($group['owner_rating'], 1) : null;
-                    
-                    // Join Window Calculation
-                    $billing_day = (int) date('j', strtotime($group['validity_start']));
-                    $today       = new DateTime();
-                    $today_day   = (int) $today->format('j');
-                    $is_join_window = ($billing_day === $today_day);
-                    
-                    if (!$is_join_window) {
-                        $next = clone $today;
-                        if ($today_day < $billing_day) {
-                            $next->setDate((int)$today->format('Y'), (int)$today->format('n'), $billing_day);
-                        } else {
-                            $next->modify('first day of next month');
-                            $next->setDate((int)$next->format('Y'), (int)$next->format('n'), $billing_day);
-                        }
-                        $next_join_display = $next->format('M d');
-                    }
                 ?>
                 <div class="group-card">
                     <span class="group-status-badge <?php echo $is_full ? 'status-full' : 'status-open'; ?>">
@@ -238,8 +221,6 @@ $brand_color = htmlspecialchars($platform['brand_color'] ?? '#e50914');
                         <button class="btn-join" style="background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.3); cursor: default;" disabled>Waiting for Approval</button>
                     <?php elseif ($is_full): ?>
                         <button class="btn-join disabled" disabled>Group Full</button>
-                    <?php elseif (!$is_join_window): ?>
-                        <button class="btn-join disabled" disabled title="You can only join on the billing date">⏳ Next join window: <?php echo $next_join_display; ?></button>
                     <?php else: ?>
                         <a href="join_group.php?group_id=<?php echo $group['group_id']; ?>" class="btn-join">Request to Join</a>
                     <?php endif; ?>

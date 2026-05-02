@@ -87,6 +87,25 @@ mysqli_stmt_close($stmt);
 $total_joined = count($active_members) + 1; // Including owner
 $total_allowed = $group['max_members'];
 $is_accepting = $total_joined < $total_allowed;
+
+// Billing Window Calculation
+$billing_day = (int) date('j', strtotime($group['validity_start']));
+$today       = new DateTime();
+$today_day   = (int) $today->format('j');
+$is_billing_day = ($billing_day === $today_day);
+
+$next_billing_display = '';
+if (!$is_billing_day) {
+    $next = clone $today;
+    if ($today_day < $billing_day) {
+        $next->setDate((int)$today->format('Y'), (int)$today->format('n'), $billing_day);
+    } else {
+        $next->modify('first day of next month');
+        $next->setDate((int)$next->format('Y'), (int)$next->format('n'), $billing_day);
+    }
+    $next_billing_display = $next->format('M d');
+}
+
 $brand_color = htmlspecialchars($group['brand_color']);
 ?>
 <!DOCTYPE html>
@@ -423,11 +442,17 @@ $brand_color = htmlspecialchars($group['brand_color']);
                                     <?php echo date('M d, g:i A', strtotime($member['joined_at'])); ?>
                                 </td>
                                 <td>
-                                    <button class="btn-action" 
-                                            onclick="acceptMember(<?php echo $member['membership_id']; ?>, this)"
-                                            <?php echo !$is_accepting ? 'disabled title="Cannot accept, group is full"' : ''; ?>>
-                                        Accept
-                                    </button>
+                                    <?php if (!$is_billing_day): ?>
+                                        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #888; cursor: not-allowed;" disabled title="Can only accept on the billing date">
+                                            Wait until <?php echo $next_billing_display; ?>
+                                        </button>
+                                    <?php else: ?>
+                                        <button class="btn-action" 
+                                                onclick="acceptMember(<?php echo $member['membership_id']; ?>, this)"
+                                                <?php echo !$is_accepting ? 'disabled title="Cannot accept, group is full"' : ''; ?>>
+                                            Accept
+                                        </button>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

@@ -28,14 +28,6 @@ if (!$group) {
     exit();
 }
 
-// Check Join Window Lock
-$billing_day = (int) date('j', strtotime($group['validity_start']));
-$today_day   = (int) date('j');
-if ($billing_day !== $today_day) {
-    header("Location: dashboard.php?error=You can only request to join this group on its billing date (day $billing_day of the month).");
-    exit();
-}
-
 // 2. Check if already a member or waitlisted
 $check_query = "SELECT membership_status FROM group_members WHERE group_id = ? AND user_id = ?";
 $stmt = mysqli_prepare($conn, $check_query);
