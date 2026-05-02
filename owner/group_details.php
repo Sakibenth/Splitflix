@@ -64,6 +64,26 @@ if ($members_res) {
 }
 mysqli_stmt_close($stmt);
 
+// Fetch Members Scheduled to Leave
+$leaving_members = [];
+$leaving_query = "
+    SELECT gm.id as membership_id, gm.scheduled_leave_date, u.user_id, u.name, u.email, u.phone
+    FROM group_members gm
+    JOIN users u ON gm.user_id = u.user_id
+    WHERE gm.group_id = ? AND gm.membership_status = 'active' AND gm.scheduled_leave_date IS NOT NULL
+    ORDER BY gm.scheduled_leave_date ASC
+";
+$stmt = mysqli_prepare($conn, $leaving_query);
+mysqli_stmt_bind_param($stmt, "i", $group_id);
+mysqli_stmt_execute($stmt);
+$leaving_res = mysqli_stmt_get_result($stmt);
+if ($leaving_res) {
+    while ($row = mysqli_fetch_assoc($leaving_res)) {
+        $leaving_members[] = $row;
+    }
+}
+mysqli_stmt_close($stmt);
+
 $total_joined = count($active_members) + 1; // Including owner
 $total_allowed = $group['max_members'];
 $is_accepting = $total_joined < $total_allowed;
@@ -136,6 +156,19 @@ $brand_color = htmlspecialchars($group['brand_color']);
         .status-cleared { border-color: rgba(34, 197, 94, 0.5); color: #4ade80; }
         .status-uncleared { border-color: rgba(239, 68, 68, 0.5); color: #f87171; }
         .empty-members { text-align: center; padding: 4rem 2rem; color: #8888aa; }
+
+        .leaving-date-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(239, 68, 68, 0.1); color: #f87171;
+            padding: 5px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+        .cancel-leave-btn {
+            background: none; border: none; color: #8888aa; font-size: 0.8rem;
+            text-decoration: underline; cursor: pointer; margin-left: 12px;
+            transition: color 0.2s;
+        }
+        .cancel-leave-btn:hover { color: #22c55e; }
 
         .payment-link-container {
             background: rgba(255, 255, 255, 0.02);
@@ -402,6 +435,55 @@ $brand_color = htmlspecialchars($group['brand_color']);
                 </table>
             <?php endif; ?>
         </div>
+
+        <!-- Leaving Queue -->
+        <div class="members-table-container" style="border-color: rgba(239, 68, 68, 0.2);">
+            <div class="members-table-header">
+                <h2>🚪 Leaving Queue</h2>
+                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171;"><?php echo count($leaving_members); ?> Scheduled</span>
+            </div>
+            <?php if (empty($leaving_members)): ?>
+                <div class="empty-members" style="padding: 2rem;">
+                    <p style="margin: 0;">No members have scheduled to leave.</p>
+                </div>
+            <?php else: ?>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Member</th>
+                            <th>Contact</th>
+                            <th>Leaving On</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($leaving_members as $lm): ?>
+                            <tr>
+                                <td>
+                                    <div style="font-weight: 600;"><?php echo htmlspecialchars($lm['name']); ?></div>
+                                </td>
+                                <td>
+                                    <div><?php echo htmlspecialchars($lm['email']); ?></div>
+                                    <?php if (!empty($lm['phone'])): ?>
+                                        <div class="member-meta">📞 <?php echo htmlspecialchars($lm['phone']); ?></div>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <span class="leaving-date-badge">
+                                        📅 <?php echo date('M d, Y', strtotime($lm['scheduled_leave_date'])); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="cancel-leave-btn" onclick="cancelLeave(<?php echo $lm['membership_id']; ?>, '<?php echo addslashes($lm['name']); ?>')">
+                                        ✕ Cancel Leave
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
     </main>
 
     <!-- Owner Review Modal -->
@@ -575,6 +657,20 @@ $brand_color = htmlspecialchars($group['brand_color']);
                 btn.textContent = 'Accept';
                 btn.disabled = false;
             });
+        }
+
+        function cancelLeave(membershipId, memberName) {
+            if (!confirm(`Cancel ${memberName}'s scheduled leave? They will remain in the group.`)) return;
+            fetch('cancel_leave.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `membership_id=${membershipId}&group_id=<?php echo $group_id; ?>`
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) window.location.reload();
+                else alert('Failed: ' + (data.error || 'Unknown error'));
+            }).catch(() => alert('Network error'));
         }
 
         // Close modal on outside click

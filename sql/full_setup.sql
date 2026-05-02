@@ -89,6 +89,7 @@ CREATE TABLE group_members (
     user_id INT NOT NULL,
     membership_status ENUM('active', 'waitlisted', 'rejected') DEFAULT 'active',
     payment_status ENUM('cleared', 'uncleared') NOT NULL DEFAULT 'uncleared',
+    scheduled_leave_date DATE DEFAULT NULL,
     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (group_id) REFERENCES subscription_group(group_id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,

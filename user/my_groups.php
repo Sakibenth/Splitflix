@@ -17,6 +17,7 @@ $query = "
            p.platform_name, p.logo_emoji, p.brand_color,
            'member' as my_role,
            gm.payment_status,
+           gm.scheduled_leave_date,
            (SELECT review_id FROM reviews WHERE group_id = sg.group_id AND reviewer_id = ? AND reviewer_role = 'member') as my_review_id
     FROM group_members gm
     JOIN subscription_group sg ON gm.group_id = sg.group_id
@@ -31,6 +32,7 @@ $query = "
            p.platform_name, p.logo_emoji, p.brand_color,
            'owner' as my_role,
            NULL as payment_status,
+           NULL as scheduled_leave_date,
            NULL as my_review_id
     FROM subscription_group sg
     JOIN platforms p ON sg.platform_id = p.platform_id
@@ -150,7 +152,21 @@ mysqli_stmt_close($stmt);
         /* Reverse order for CSS-only star hover trick */
         .rating-input { flex-direction: row-reverse; }
 
-        textarea.review-text { width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 1rem; color: #fff; margin-bottom: 1.5rem; resize: none; min-height: 100px; }
+        .btn-leave {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(239, 68, 68, 0.08); color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.25); font-size: 0.82rem;
+            font-weight: 600; padding: 7px 14px; border-radius: 8px;
+            text-decoration: none; transition: all 0.2s; cursor: pointer;
+        }
+        .btn-leave:hover { background: rgba(239, 68, 68, 0.18); }
+        .badge-leave-scheduled {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(239, 68, 68, 0.08); color: #f87171;
+            font-size: 0.82rem; font-weight: 600;
+            padding: 6px 12px; border-radius: 8px;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
         .btn-submit { width: 100%; padding: 12px; background: #eab308; color: #000; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; }
     </style>
 </head>
@@ -218,6 +234,20 @@ mysqli_stmt_close($stmt);
                             <a href="../payments/checkout.php?group_id=<?php echo $group['group_id']; ?>" class="btn-pay">
                                 💳 Pay Now
                             </a>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if ($group['my_role'] === 'member'): ?>
+                    <div style="display: flex; justify-content: flex-end;">
+                        <?php if ($group['scheduled_leave_date']): ?>
+                            <span class="badge-leave-scheduled">
+                                🚪 Leaving <?php echo date('M d, Y', strtotime($group['scheduled_leave_date'])); ?>
+                            </span>
+                        <?php else: ?>
+                            <a href="leave_group.php?group_id=<?php echo $group['group_id']; ?>"
+                               class="btn-leave"
+                               onclick="return confirm('Schedule your leave from this group? You will stay active until the next billing date.')">🚪 Leave Group</a>
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
