@@ -65,6 +65,7 @@ CREATE TABLE subscription_group (
     owner_id INT NOT NULL,
     platform_id INT NOT NULL,
     plan_description VARCHAR(255) NOT NULL,
+    group_description TEXT DEFAULT NULL,
     group_name VARCHAR(150) NOT NULL,
     max_members INT NOT NULL DEFAULT 4,
     seats_remaining INT NOT NULL DEFAULT 3,

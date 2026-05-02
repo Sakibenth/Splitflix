@@ -57,15 +57,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "End date must be after the start date.";
     } else {
         $seats_remaining = $max_members - 1; // Owner takes 1 seat
-        $plan_id = null; // Catalog removed
-
         $insert_query = "
-            INSERT INTO subscription_group (owner_id, platform_id, plan_id, plan_description, group_description, group_name, max_members, seats_remaining, cost_per_member, validity_start, validity_end, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+            INSERT INTO subscription_group (owner_id, platform_id, plan_description, group_description, group_name, max_members, seats_remaining, cost_per_member, validity_start, validity_end, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
         ";
         
         if ($stmt = mysqli_prepare($conn, $insert_query)) {
-            mysqli_stmt_bind_param($stmt, "iiisssiidss", $owner_id, $platform_id, $plan_id, $plan_name, $group_description, $group_name, $max_members, $seats_remaining, $cost_per_member, $validity_start, $validity_end);
+            mysqli_stmt_bind_param($stmt, "iisssiidss", $owner_id, $platform_id, $plan_name, $group_description, $group_name, $max_members, $seats_remaining, $cost_per_member, $validity_start, $validity_end);
             
             if (mysqli_stmt_execute($stmt)) {
                 $success = "Group created successfully!";
