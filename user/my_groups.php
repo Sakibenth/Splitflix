@@ -249,7 +249,8 @@ foreach ($my_groups as $g) {
         .rec-card-body .rec-meta { font-size: 0.76rem; color: #8888aa; margin-top: 6px; }
 
         /* ---- Feature 8: Group Chat ---- */
-        .chat-pane { display: flex; flex-direction: column; height: 420px; }
+        .chat-pane { height: 420px; }
+        .tab-pane.chat-pane.active { display: flex; flex-direction: column; }
         .chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 12px 2px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
         .chat-messages::-webkit-scrollbar { width: 4px; }
         .chat-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
@@ -367,13 +368,13 @@ foreach ($my_groups as $g) {
                     <!-- Feature 6, 7 & 8: Tabs -->
                     <div class="card-tabs" style="--brand: <?php echo $brand; ?>">
                         <div class="tab-row">
-                            <button class="tab-btn active" onclick="switchCardTab(<?php echo $gid; ?>, 'notif', this)">📢 Notifications</button>
+                            <button class="tab-btn" onclick="switchCardTab(<?php echo $gid; ?>, 'notif', this)">📢 Notifications</button>
                             <button class="tab-btn" onclick="switchCardTab(<?php echo $gid; ?>, 'rec', this)">🎬 Recommendations</button>
                             <button class="tab-btn" onclick="switchCardTab(<?php echo $gid; ?>, 'chat', this); startChat(<?php echo $gid; ?>)">💬 Group Chat</button>
                         </div>
 
                         <!-- Notifications pane -->
-                        <div class="tab-pane active" id="ctab-notif-<?php echo $gid; ?>">
+                        <div class="tab-pane" id="ctab-notif-<?php echo $gid; ?>">
                             <?php if (empty($notifs_for_group)): ?>
                                 <div class="notif-empty-msg">No notifications from your group owner yet.</div>
                             <?php else: ?>
@@ -541,10 +542,17 @@ foreach ($my_groups as $g) {
         // ---- Feature 6 & 7: Tab switching ----
         function switchCardTab(gid, tab, btn) {
             const card = btn.closest('.card-tabs');
+            const isActive = btn.classList.contains('active');
+            
+            // Remove active from all
             card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             card.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById('ctab-' + tab + '-' + gid).classList.add('active');
+            
+            // If it wasn't active before, turn it on
+            if (!isActive) {
+                btn.classList.add('active');
+                document.getElementById('ctab-' + tab + '-' + gid).classList.add('active');
+            }
         }
 
         function showRecAlert(gid, msg, type) {
