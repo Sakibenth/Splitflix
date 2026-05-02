@@ -5,6 +5,7 @@ CREATE DATABASE IF NOT EXISTS splitflix;
 USE splitflix;
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS reviews;
 DROP TABLE IF EXISTS group_members;
 DROP TABLE IF EXISTS subscription_group;
 DROP TABLE IF EXISTS plans;
@@ -93,6 +94,24 @@ CREATE TABLE group_members (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     UNIQUE KEY unique_membership (group_id, user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========================================
+-- Reviews table
+-- ========================================
+CREATE TABLE reviews (
+    review_id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id INT NOT NULL,
+    reviewer_id INT NOT NULL,
+    reviewee_id INT NOT NULL,
+    reviewer_role ENUM('member', 'owner') NOT NULL,
+    rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    comment TEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (group_id) REFERENCES subscription_group(group_id) ON DELETE CASCADE,
+    FOREIGN KEY (reviewer_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (reviewee_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    UNIQUE KEY unique_review (group_id, reviewer_id, reviewer_role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ========================================
 -- Seed Data: Platforms
