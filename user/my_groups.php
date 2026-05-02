@@ -68,9 +68,10 @@ while ($row = mysqli_fetch_assoc($waitlist_res)) {
 }
 mysqli_stmt_close($stmt);
 
-// tanvir muhtady Feature 6,7:  notifications and recommendations 
+// Feature 6 & 7: Pre-fetch notifications and recommendations for each active member group
 $group_notifs = [];
 $group_recs   = [];
+$group_chats  = [];
 foreach ($my_groups as $g) {
     if ($g['my_role'] !== 'member') continue;
     $gid = (int)$g['group_id'];
@@ -92,6 +93,15 @@ foreach ($my_groups as $g) {
     $group_recs[$gid] = [];
     while ($row = mysqli_fetch_assoc($rr)) $group_recs[$gid][] = $row;
     mysqli_stmt_close($rs);
+
+    // Chat messages (last 50)
+    $cs = mysqli_prepare($conn, "SELECT gc.message_id, gc.message, gc.created_at, gc.user_id, u.name FROM group_chat gc JOIN users u ON gc.user_id = u.user_id WHERE gc.group_id = ? ORDER BY gc.created_at ASC LIMIT 50");
+    mysqli_stmt_bind_param($cs, "i", $gid);
+    mysqli_stmt_execute($cs);
+    $cr = mysqli_stmt_get_result($cs);
+    $group_chats[$gid] = [];
+    while ($row = mysqli_fetch_assoc($cr)) $group_chats[$gid][] = $row;
+    mysqli_stmt_close($cs);
 }
 ?>
 <!DOCTYPE html>
@@ -237,6 +247,29 @@ foreach ($my_groups as $g) {
         .badge-platform { background: rgba(229,9,20,0.1); color: #ff6b6b; }
         .rec-card-body .rec-desc { font-size: 0.85rem; color: #9999bb; line-height: 1.4; }
         .rec-card-body .rec-meta { font-size: 0.76rem; color: #8888aa; margin-top: 6px; }
+
+        /* ---- Feature 8: Group Chat ---- */
+        .chat-pane { display: flex; flex-direction: column; height: 420px; }
+        .chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 12px 2px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
+        .chat-messages::-webkit-scrollbar { width: 4px; }
+        .chat-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
+        .chat-msg { display: flex; gap: 10px; align-items: flex-start; }
+        .chat-msg.mine { flex-direction: row-reverse; }
+        .chat-avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; color: #f0f0f5; flex-shrink: 0; }
+        .chat-bubble-wrap { max-width: 70%; }
+        .chat-name { font-size: 0.72rem; color: #8888aa; margin-bottom: 3px; font-weight: 600; }
+        .chat-msg.mine .chat-name { text-align: right; }
+        .chat-bubble { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px 12px 12px 4px; padding: 8px 12px; font-size: 0.9rem; color: #e0e0f0; line-height: 1.45; word-break: break-word; }
+        .chat-msg.mine .chat-bubble { background: rgba(229,9,20,0.15); border-color: rgba(229,9,20,0.25); border-radius: 12px 12px 4px 12px; color: #f0e0e0; }
+        .chat-time { font-size: 0.7rem; color: #666688; margin-top: 3px; }
+        .chat-msg.mine .chat-time { text-align: right; }
+        .chat-empty { text-align: center; color: #8888aa; font-size: 0.88rem; padding: 2rem 0; margin: auto; }
+        .chat-compose { display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06); margin-top: 4px; }
+        .chat-input { flex: 1; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #f0f0f5; padding: 9px 12px; font-size: 0.9rem; font-family: inherit; transition: border-color 0.2s; resize: none; height: 40px; }
+        .chat-input:focus { outline: none; border-color: #e50914; }
+        .chat-send-btn { background: #e50914; color: #fff; border: none; border-radius: 8px; padding: 0 16px; font-size: 0.88rem; font-weight: 700; cursor: pointer; transition: filter 0.2s; white-space: nowrap; }
+        .chat-send-btn:hover { filter: brightness(1.1); }
+        .chat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -329,12 +362,14 @@ foreach ($my_groups as $g) {
                         $brand = htmlspecialchars($group['brand_color']);
                         $notifs_for_group = $group_notifs[$gid] ?? [];
                         $recs_for_group   = $group_recs[$gid] ?? [];
+                        $chats_for_group  = $group_chats[$gid] ?? [];
                     ?>
-                    <!-- Feature 6 & 7: Tabs -->
+                    <!-- Feature 6, 7 & 8: Tabs -->
                     <div class="card-tabs" style="--brand: <?php echo $brand; ?>">
                         <div class="tab-row">
                             <button class="tab-btn active" onclick="switchCardTab(<?php echo $gid; ?>, 'notif', this)">📢 Notifications</button>
                             <button class="tab-btn" onclick="switchCardTab(<?php echo $gid; ?>, 'rec', this)">🎬 Recommendations</button>
+                            <button class="tab-btn" onclick="switchCardTab(<?php echo $gid; ?>, 'chat', this); startChat(<?php echo $gid; ?>)">💬 Group Chat</button>
                         </div>
 
                         <!-- Notifications pane -->
@@ -405,6 +440,35 @@ foreach ($my_groups as $g) {
                                 <?php endif; ?>
                             </div>
                         </div>
+
+                        <!-- Chat pane -->
+                        <div class="tab-pane chat-pane" id="ctab-chat-<?php echo $gid; ?>">
+                            <div class="chat-messages" id="chat-msgs-<?php echo $gid; ?>">
+                                <?php if (empty($chats_for_group)): ?>
+                                    <div class="chat-empty" id="chat-empty-<?php echo $gid; ?>">No messages yet. Say hello! 👋</div>
+                                <?php else: ?>
+                                    <?php foreach ($chats_for_group as $cm):
+                                        $initials = strtoupper(substr($cm['name'], 0, 1));
+                                        $is_mine  = $cm['user_id'] == $user_id;
+                                    ?>
+                                    <div class="chat-msg <?php echo $is_mine ? 'mine' : ''; ?>" id="cmsg-<?php echo $cm['message_id']; ?>">
+                                        <div class="chat-avatar"><?php echo $initials; ?></div>
+                                        <div class="chat-bubble-wrap">
+                                            <div class="chat-name"><?php echo $is_mine ? 'You' : htmlspecialchars($cm['name']); ?></div>
+                                            <div class="chat-bubble"><?php echo nl2br(htmlspecialchars($cm['message'])); ?></div>
+                                            <div class="chat-time"><?php echo date('M d, g:i A', strtotime($cm['created_at'])); ?></div>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                            <div class="chat-compose">
+                                <textarea class="chat-input" id="chat-input-<?php echo $gid; ?>" placeholder="Type a message..." rows="1"
+                                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat(<?php echo $gid; ?>);}"></textarea>
+                                <button class="chat-send-btn" onclick="sendChat(<?php echo $gid; ?>)">Send</button>
+                            </div>
+                        </div>
+
                     </div>
                     <?php endif; ?>
                 </div>
@@ -540,6 +604,80 @@ foreach ($my_groups as $g) {
 
         function escHtml(s) {
             return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        // ---- Feature 8: Group Chat ----
+        const chatPollers = {}; // tracks setInterval per group
+        const lastMsgIds  = {}; // tracks last seen message_id per group
+
+        function startChat(gid) {
+            // Scroll to bottom on open
+            setTimeout(() => scrollChatBottom(gid), 50);
+            // Start polling if not already
+            if (chatPollers[gid]) return;
+            pollChat(gid); // immediate first poll
+            chatPollers[gid] = setInterval(() => pollChat(gid), 4000);
+        }
+
+        function scrollChatBottom(gid) {
+            const box = document.getElementById('chat-msgs-' + gid);
+            if (box) box.scrollTop = box.scrollHeight;
+        }
+
+        function pollChat(gid) {
+            const lastId = lastMsgIds[gid] || 0;
+            fetch(`chat_messages.php?group_id=${gid}&after=${lastId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success || !data.messages.length) return;
+                    const box = document.getElementById('chat-msgs-' + gid);
+                    const empty = document.getElementById('chat-empty-' + gid);
+                    if (empty) empty.remove();
+                    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+                    data.messages.forEach(m => {
+                        if (document.getElementById('cmsg-' + m.message_id)) return; // skip if already rendered
+                        const mine = m.is_mine;
+                        const div = document.createElement('div');
+                        div.className = 'chat-msg' + (mine ? ' mine' : '');
+                        div.id = 'cmsg-' + m.message_id;
+                        div.innerHTML = `
+                            <div class="chat-avatar">${escHtml(m.initials)}</div>
+                            <div class="chat-bubble-wrap">
+                                <div class="chat-name">${mine ? 'You' : escHtml(m.name)}</div>
+                                <div class="chat-bubble">${escHtml(m.message).replace(/\n/g,'<br>')}</div>
+                                <div class="chat-time">${escHtml(m.created_at)}</div>
+                            </div>`;
+                        box.appendChild(div);
+                        lastMsgIds[gid] = m.message_id;
+                    });
+                    if (atBottom) scrollChatBottom(gid);
+                })
+                .catch(() => {}); // silent fail on poll errors
+        }
+
+        function sendChat(gid) {
+            const input = document.getElementById('chat-input-' + gid);
+            const msg   = input.value.trim();
+            if (!msg) return;
+            const btn = input.nextElementSibling;
+            btn.disabled = true;
+            input.disabled = true;
+            fetch('send_chat.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `group_id=${gid}&message=${encodeURIComponent(msg)}`
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    input.value = '';
+                    pollChat(gid); // fetch immediately after sending
+                } else {
+                    alert(data.error || 'Failed to send message.');
+                }
+            })
+            .catch(() => alert('Network error.'))
+            .finally(() => { btn.disabled = false; input.disabled = false; input.focus(); });
         }
     </script>
 </body>
