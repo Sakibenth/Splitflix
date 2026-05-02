@@ -40,14 +40,17 @@ mysqli_stmt_close($stmt);
 $active_members = [];
 $waitlisted_members = [];
 $members_query = "
-    SELECT gm.id as membership_id, gm.payment_status, gm.membership_status, gm.joined_at, u.user_id, u.name, u.email, u.phone 
+    SELECT gm.id as membership_id, gm.payment_status, gm.membership_status, gm.joined_at, u.user_id, u.name, u.email, u.phone,
+           (SELECT AVG(rating) FROM reviews WHERE reviewee_id = u.user_id AND reviewer_role = 'owner') as member_rating,
+           (SELECT COUNT(*) FROM reviews WHERE reviewee_id = u.user_id AND reviewer_role = 'owner') as review_count,
+           (SELECT review_id FROM reviews WHERE group_id = gm.group_id AND reviewer_id = ? AND reviewee_id = u.user_id AND reviewer_role = 'owner') as owner_review_id
     FROM group_members gm
     JOIN users u ON gm.user_id = u.user_id
     WHERE gm.group_id = ?
     ORDER BY gm.joined_at ASC
 ";
 $stmt = mysqli_prepare($conn, $members_query);
-mysqli_stmt_bind_param($stmt, "i", $group_id);
+mysqli_stmt_bind_param($stmt, "ii", $owner_id, $group_id);
 mysqli_stmt_execute($stmt);
 $members_res = mysqli_stmt_get_result($stmt);
 if ($members_res) {
@@ -167,6 +170,14 @@ $brand_color = htmlspecialchars($group['brand_color']);
             transition: all 0.2s;
         }
         .payment-input:focus { outline: none; border-color: <?php echo $brand_color; ?>; box-shadow: 0 0 0 3px <?php echo $brand_color; ?>15; }
+
+        /* Modal Styles */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-content { background: #1a1a24; padding: 2.5rem; border-radius: 20px; width: 100%; max-width: 450px; border: 1px solid rgba(255,255,255,0.1); }
+        .rating-input { display: flex; gap: 10px; margin: 1.5rem 0; justify-content: center; flex-direction: row-reverse; }
+        .rating-input input { display: none; }
+        .rating-input label { font-size: 2rem; cursor: pointer; color: #333; transition: color 0.2s; }
+        .rating-input input:checked ~ label, .rating-input label:hover, .rating-input label:hover ~ label { color: #eab308; }
     </style>
 </head>
 <body>
@@ -295,6 +306,17 @@ $brand_color = htmlspecialchars($group['brand_color']);
                             <tr>
                                 <td>
                                     <div style="font-weight: 600;"><?php echo htmlspecialchars($member['name']); ?></div>
+                                    <div class="member-meta">
+                                        <?php if ($member['member_rating']): ?>
+                                            <span style="color: #eab308;">⭐ <?php echo round($member['member_rating'], 1); ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($member['owner_review_id']): ?>
+                                            <span style="color: #22c55e; margin-left: 8px;">✓ Reviewed</span>
+                                        <?php else: ?>
+                                            <button onclick="openOwnerReviewModal(<?php echo $group_id; ?>, <?php echo $member['user_id']; ?>, '<?php echo addslashes($member['name']); ?>')" style="background: none; border: none; color: #eab308; cursor: pointer; padding: 0; font-size: 0.8rem; text-decoration: underline; margin-left: 8px;">Review Member</button>
+                                        <?php endif; ?>
+                                        <button onclick="removeMember(<?php echo $member['membership_id']; ?>, '<?php echo addslashes($member['name']); ?>')" style="background: none; border: none; color: #ff4444; cursor: pointer; padding: 0; font-size: 0.8rem; text-decoration: underline; margin-left: 12px;">Remove</button>
+                                    </div>
                                 </td>
                                 <td>
                                     <div><?php echo htmlspecialchars($member['email']); ?></div>
@@ -343,13 +365,23 @@ $brand_color = htmlspecialchars($group['brand_color']);
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($waitlisted_members as $index => $member): ?>
+                        <?php foreach ($waitlisted_members as $index => $member): 
+                            $m_rating = $member['member_rating'] ? round($member['member_rating'], 1) : null;
+                        ?>
                             <tr>
                                 <td>
                                     <strong style="color: #8888aa;"><?php echo $index + 1; ?></strong>
                                 </td>
                                 <td>
                                     <div style="font-weight: 600;"><?php echo htmlspecialchars($member['name']); ?></div>
+                                    <div class="member-meta">
+                                        <?php if ($m_rating): ?>
+                                            <span style="color: #eab308;">⭐ <?php echo $m_rating; ?></span>
+                                            <span style="font-size: 0.75rem;">(<?php echo $member['review_count']; ?> reviews)</span>
+                                        <?php else: ?>
+                                            <span style="color: #666; font-size: 0.75rem;">New Member (No reviews)</span>
+                                        <?php endif; ?>
+                                    </div>
                                 </td>
                                 <td>
                                     <div><?php echo htmlspecialchars($member['email']); ?></div>
@@ -372,7 +404,47 @@ $brand_color = htmlspecialchars($group['brand_color']);
         </div>
     </main>
 
+    <!-- Owner Review Modal -->
+    <div id="ownerReviewModal" class="modal">
+        <div class="modal-content">
+            <h2 id="ownerModalTitle">Review Member</h2>
+            <p style="color: #8888aa; font-size: 0.9rem; margin-bottom: 1rem;">Review this member's payment discipline and cooperation.</p>
+            
+            <form action="../user/submit_review.php" method="POST">
+                <input type="hidden" id="ownerModalGroupId" name="group_id">
+                <input type="hidden" id="ownerModalRevieweeId" name="reviewee_id">
+                <input type="hidden" name="role" value="owner">
+
+                <div class="rating-input">
+                    <input type="radio" name="rating" value="5" id="ostar5" required><label for="ostar5">★</label>
+                    <input type="radio" name="rating" value="4" id="ostar4"><label for="ostar4">★</label>
+                    <input type="radio" name="rating" value="3" id="ostar3"><label for="ostar3">★</label>
+                    <input type="radio" name="rating" value="2" id="ostar2"><label for="ostar2">★</label>
+                    <input type="radio" name="rating" value="1" id="ostar1"><label for="ostar1">★</label>
+                </div>
+
+                <textarea name="comment" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 1rem; color: #fff; margin-bottom: 1.5rem; resize: none; min-height: 100px;" placeholder="Feedback on member..."></textarea>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" onclick="closeOwnerReviewModal()" style="flex: 1; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: #fff; cursor: pointer;">Cancel</button>
+                    <button type="submit" style="flex: 2; padding: 12px; background: #eab308; color: #000; border: none; border-radius: 10px; font-weight: 700; cursor: pointer;">Submit Review</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
+        function openOwnerReviewModal(groupId, memberId, memberName) {
+            document.getElementById('ownerModalGroupId').value = groupId;
+            document.getElementById('ownerModalRevieweeId').value = memberId;
+            document.getElementById('ownerModalTitle').textContent = 'Review ' + memberName;
+            document.getElementById('ownerReviewModal').style.display = 'flex';
+        }
+
+        function closeOwnerReviewModal() {
+            document.getElementById('ownerReviewModal').style.display = 'none';
+        }
+
         function updatePaymentStatus(membershipId, selectElement) {
             const newStatus = selectElement.value;
             selectElement.className = 'status-select ' + (newStatus === 'cleared' ? 'status-cleared' : 'status-uncleared');
@@ -454,6 +526,28 @@ $brand_color = htmlspecialchars($group['brand_color']);
             });
         }
 
+        function removeMember(membershipId, memberName) {
+            if(!confirm(`Are you sure you want to remove ${memberName} from the group? This will free up their seat.`)) return;
+            
+            fetch('remove_member.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `membership_id=${membershipId}&group_id=<?php echo $group_id; ?>`
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Failed to remove member: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(e => {
+                console.error(e);
+                alert('Network error');
+            });
+        }
+
         function acceptMember(membershipId, btn) {
             if(!confirm("Are you sure you want to accept this member into the group?")) return;
             
@@ -481,6 +575,11 @@ $brand_color = htmlspecialchars($group['brand_color']);
                 btn.textContent = 'Accept';
                 btn.disabled = false;
             });
+        }
+
+        // Close modal on outside click
+        window.onclick = function(event) {
+            if (event.target == document.getElementById('ownerReviewModal')) closeOwnerReviewModal();
         }
     </script>
 </body>
