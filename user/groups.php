@@ -249,7 +249,7 @@ $brand_color = htmlspecialchars($platform['brand_color'] ?? '#e50914');
                     <?php elseif ($group['my_status'] === 'waitlisted'): ?>
                         <button class="btn-join" style="background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.3); cursor: default;" disabled>Waiting for Approval</button>
                     <?php elseif ($is_full): ?>
-                        <button class="btn-join disabled" disabled>Group Full</button>
+                        <a href="join_group.php?group_id=<?php echo $group['group_id']; ?>" class="btn-join" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">Join Waitlist (Full)</a>
                     <?php else: ?>
                         <a href="join_group.php?group_id=<?php echo $group['group_id']; ?>" class="btn-join">Request to Join</a>
                     <?php endif; ?>

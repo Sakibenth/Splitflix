@@ -91,11 +91,23 @@ $is_accepting = $total_joined < $total_allowed;
 // Billing Window Calculation
 $billing_day = (int) date('j', strtotime($group['validity_start']));
 $today       = new DateTime();
+$today->setTime(0, 0, 0);
+
 $today_day   = (int) $today->format('j');
-$is_billing_day = ($billing_day === $today_day);
+
+$last_billing_date = clone $today;
+if ($today_day < $billing_day) {
+    $last_billing_date->modify('first day of last month');
+    $last_billing_date->setDate((int)$last_billing_date->format('Y'), (int)$last_billing_date->format('n'), $billing_day);
+} else {
+    $last_billing_date->setDate((int)$today->format('Y'), (int)$today->format('n'), $billing_day);
+}
+
+$days_since_billing = $today->diff($last_billing_date)->days;
+$is_accepting_window = ($days_since_billing <= 7 && $today >= $last_billing_date);
 
 $next_billing_display = '';
-if (!$is_billing_day) {
+if (!$is_accepting_window) {
     $next = clone $today;
     if ($today_day < $billing_day) {
         $next->setDate((int)$today->format('Y'), (int)$today->format('n'), $billing_day);
@@ -133,7 +145,15 @@ mysqli_stmt_close($n_stmt);
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
-        .details-container { max-width: 1100px; margin: 2rem auto; padding: 0 2rem; }
+        .details-container { width: 95%; max-width: 1600px; margin: 2rem auto; padding: 0 1rem; }
+        .dashboard-layout { display: grid; grid-template-columns: 1.2fr 2.5fr; gap: 2.5rem; align-items: start; }
+        .main-column { order: 2; }
+        .side-column { order: 1; }
+        @media (max-width: 1000px) { 
+            .dashboard-layout { grid-template-columns: 1fr; } 
+            .main-column { order: 1; }
+            .side-column { order: 2; }
+        }
         .back-link { display: inline-flex; align-items: center; gap: 8px; color: #8888aa; text-decoration: none; font-size: 0.95rem; font-weight: 500; margin-bottom: 2rem; transition: color 0.2s; }
         .back-link:hover { color: #fff; }
 
@@ -165,6 +185,51 @@ mysqli_stmt_close($n_stmt);
         .btn-cancel:hover { background: rgba(255, 255, 255, 0.15); }
         .btn-action:hover { filter: brightness(1.1); }
         .btn-action:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .side-panel-accordion {
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.4));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+            transition: all 0.3s;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+        .side-panel-accordion summary {
+            padding: 1.25rem 1.5rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #f0f0f5;
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid transparent;
+            border-left: 4px solid <?php echo $brand_color; ?>;
+            margin: 0;
+            transition: background 0.3s;
+        }
+        .side-panel-accordion summary:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .side-panel-accordion summary::-webkit-details-marker { display: none; }
+        .side-panel-accordion summary::after {
+            content: '▼';
+            font-size: 0.8rem;
+            color: #8888aa;
+            transition: transform 0.3s;
+        }
+        .side-panel-accordion[open] summary {
+            border-bottom-color: rgba(255, 255, 255, 0.05);
+        }
+        .side-panel-accordion[open] summary::after {
+            transform: rotate(-180deg);
+        }
+        .side-panel-content {
+            padding: 1rem 1.5rem;
+        }
 
         .stats-panel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 3rem; }
         .stat-card { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 12px; display: flex; flex-direction: column; }
@@ -305,7 +370,9 @@ mysqli_stmt_close($n_stmt);
             Back to Dashboard
         </a>
 
-        <!-- Header Card -->
+        <div class="dashboard-layout">
+            <div class="main-column">
+                <!-- Header Card -->
         <div class="group-header-card">
             <div class="header-logo">
                 <?php echo getPlatformIcon($group['platform_name']); ?>
@@ -446,16 +513,18 @@ mysqli_stmt_close($n_stmt);
             <?php endif; ?>
         </div>
 
-        <!-- Waitlist Queue Table -->
-        <div class="members-table-container">
-            <div class="members-table-header">
-                <h2>Waitlist Queue</h2>
-                <span class="badge"><?php echo count($waitlisted_members); ?> Waiting</span>
-            </div>
-            <?php if (empty($waitlisted_members)): ?>
-                <div class="empty-members" style="padding: 2rem;">
-                    <p style="margin: 0;">The waitlist is currently empty.</p>
-                </div>
+            </div> <!-- End Main Column -->
+
+            <div class="side-column">
+                <!-- Waitlist Queue Accordion -->
+                <details class="side-panel-accordion">
+                    <summary>Waitlist Queue <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff; padding: 2px 8px; border-radius: 12px; margin-left: 10px;"><?php echo count($waitlisted_members); ?> Waiting</span></summary>
+                    <div class="side-panel-content" style="padding: 0;">
+                        <div class="members-table-container" style="border: none; margin: 0; border-radius: 0;">
+                            <?php if (empty($waitlisted_members)): ?>
+                                <div class="empty-members" style="padding: 2rem;">
+                                    <p style="margin: 0;">The waitlist is currently empty.</p>
+                                </div>
             <?php else: ?>
                 <table>
                     <thead>
@@ -493,8 +562,8 @@ mysqli_stmt_close($n_stmt);
                                     <?php echo date('M d, g:i A', strtotime($member['joined_at'])); ?>
                                 </td>
                                 <td>
-                                    <?php if (!$is_billing_day): ?>
-                                        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #888; cursor: not-allowed;" disabled title="Can only accept on the billing date">
+                                    <?php if (!$is_accepting_window): ?>
+                                        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #888; cursor: not-allowed;" disabled title="Can only accept within 7 days of the billing date">
                                             Wait until <?php echo $next_billing_display; ?>
                                         </button>
                                     <?php else: ?>
@@ -510,19 +579,20 @@ mysqli_stmt_close($n_stmt);
                     </tbody>
                 </table>
             <?php endif; ?>
-        </div>
+                        </div>
+                    </div>
+                </details>
 
         <!-- Leaving Queue -->
-        <div class="members-table-container" style="border-color: rgba(239, 68, 68, 0.2);">
-            <div class="members-table-header">
-                <h2>🚪 Leaving Queue</h2>
-                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171;"><?php echo count($leaving_members); ?> Scheduled</span>
-            </div>
-            <?php if (empty($leaving_members)): ?>
-                <div class="empty-members" style="padding: 2rem;">
-                    <p style="margin: 0;">No members have scheduled to leave.</p>
-                </div>
-            <?php else: ?>
+                <details class="side-panel-accordion">
+                    <summary>🚪 Leaving Queue <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; padding: 2px 8px; border-radius: 12px; margin-left: 10px;"><?php echo count($leaving_members); ?> Scheduled</span></summary>
+                    <div class="side-panel-content" style="padding: 0;">
+                        <div class="members-table-container" style="border: none; margin: 0; border-radius: 0;">
+                            <?php if (empty($leaving_members)): ?>
+                                <div class="empty-members" style="padding: 2rem;">
+                                    <p style="margin: 0;">No members have scheduled to leave.</p>
+                                </div>
+                            <?php else: ?>
                 <table>
                     <thead>
                         <tr>
@@ -559,13 +629,15 @@ mysqli_stmt_close($n_stmt);
                     </tbody>
                 </table>
             <?php endif; ?>
-        </div>
+                        </div>
+                    </div>
+                </details>
+
         <!-- tanvir muhtady feature 6 notification -->
-        <div class="notif-section">
-            <div class="notif-section-header">
-                <h2>📢 Group Notifications</h2>
-            </div>
-            <div class="notif-compose">
+                <details class="side-panel-accordion">
+                    <summary>📢 Group Notifications <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff; padding: 2px 8px; border-radius: 12px; margin-left: 10px;"><?php echo count($notifs); ?></span></summary>
+                    <div class="side-panel-content">
+                        <div class="notif-compose">
                 <label>Broadcast a message to your group members</label>
                 <div id="notif-alert" class="notif-alert"></div>
                 <textarea id="notif-message" placeholder="e.g. time moton taka na dile rog kata hobe"></textarea>
@@ -586,7 +658,11 @@ mysqli_stmt_close($n_stmt);
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
-        </div>
+                        </div>
+                    </div>
+                </details>
+            </div> <!-- End Side Column -->
+        </div> <!-- End Dashboard Layout -->
     </main>
 
     <!-- Owner Review Modal -->

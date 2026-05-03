@@ -54,9 +54,24 @@ if (($group['active_count'] + 1) >= $group['max_members']) {
 }
 
 $billing_day = (int) date('j', strtotime($group['validity_start']));
-$today_day   = (int) date('j');
-if ($billing_day !== $today_day) {
-    echo json_encode(['success' => false, 'error' => 'Can only accept members on the billing date']);
+$today       = new DateTime();
+$today->setTime(0, 0, 0);
+
+$today_day   = (int) $today->format('j');
+
+$last_billing_date = clone $today;
+if ($today_day < $billing_day) {
+    $last_billing_date->modify('first day of last month');
+    $last_billing_date->setDate((int)$last_billing_date->format('Y'), (int)$last_billing_date->format('n'), $billing_day);
+} else {
+    $last_billing_date->setDate((int)$today->format('Y'), (int)$today->format('n'), $billing_day);
+}
+
+$days_since_billing = $today->diff($last_billing_date)->days;
+$is_accepting_window = ($days_since_billing <= 7 && $today >= $last_billing_date);
+
+if (!$is_accepting_window) {
+    echo json_encode(['success' => false, 'error' => 'Can only accept members within 7 days after the billing date']);
     exit();
 }
 
@@ -64,6 +79,18 @@ if ($billing_day !== $today_day) {
 mysqli_begin_transaction($conn);
 
 try {
+    // 2.5 Get user_id for the membership
+    $get_user_query = "SELECT user_id FROM group_members WHERE id = ? AND group_id = ?";
+    $stmt_user = mysqli_prepare($conn, $get_user_query);
+    mysqli_stmt_bind_param($stmt_user, "ii", $membership_id, $group_id);
+    mysqli_stmt_execute($stmt_user);
+    $res_user = mysqli_stmt_get_result($stmt_user);
+    if (!$res_user || mysqli_num_rows($res_user) === 0) {
+        throw new Exception("Membership record not found");
+    }
+    $member_user_id = mysqli_fetch_assoc($res_user)['user_id'];
+    mysqli_stmt_close($stmt_user);
+
     // 3. Update membership status
     $update_member = "UPDATE group_members SET membership_status = 'active' WHERE id = ? AND group_id = ? AND membership_status = 'waitlisted'";
     $stmt1 = mysqli_prepare($conn, $update_member);
@@ -81,6 +108,13 @@ try {
     mysqli_stmt_bind_param($stmt2, "i", $group_id);
     mysqli_stmt_execute($stmt2);
     mysqli_stmt_close($stmt2);
+
+    // 5. Delete waitlist requests for this user in all other groups
+    $delete_waitlist = "DELETE FROM group_members WHERE user_id = ? AND group_id != ? AND membership_status = 'waitlisted'";
+    $stmt3 = mysqli_prepare($conn, $delete_waitlist);
+    mysqli_stmt_bind_param($stmt3, "ii", $member_user_id, $group_id);
+    mysqli_stmt_execute($stmt3);
+    mysqli_stmt_close($stmt3);
 
     mysqli_commit($conn);
     echo json_encode(['success' => true]);
