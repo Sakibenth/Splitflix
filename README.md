@@ -1,28 +1,28 @@
-# 🎬 Splitflix
+<h1 align="center">Splitflix</h1>
 
 **Splitflix** is a subscription-sharing platform built for CSE370 (Database Systems). It allows users to form groups, share digital subscriptions (like Netflix, Spotify, Amazon Prime, etc.), and manage costs effectively. The platform features a dual-role system where users can either join existing groups or create their own as group owners.
 
-## ✨ Features
+## Features
 
-### 👤 For Users
+### For Users
 - **Browse Groups**: Search and discover available subscription groups across various platforms.
 - **Join Requests**: Send requests to join waitlists for full groups or join directly if seats are available.
 - **Track Subscriptions**: Keep track of your active memberships, upcoming billing dates, and payment history.
 - **Payment Verification**: Submit payment details (via Google Forms integration) to secure your membership securely.
 
-### 👑 For Owners
+### For Owners
 - **Create & Manage Groups**: Set up new subscription groups, define platform types, total seats, and pricing.
 - **Member Approvals**: Review and approve join requests, managing members based on flexible waitlist models and billing dates.
 - **Owner Verification System**: Robust verification process involving identity document uploads and phone number validation for platform authenticity.
 - **Revenue Tracking & Notifications**: Track payment statuses, manage group revenue, and broadcast updates to group members.
 
-## 🛠️ Technology Stack
+## Technology Stack
 - **Frontend**: HTML5, Vanilla CSS (Custom Design System with Inter font), JavaScript
 - **Backend**: PHP 8.x
 - **Database**: MySQL (via XAMPP)
 - **Architecture**: Custom routing and session management system
 
-## 🚀 Installation & Setup
+## Installation & Setup
 
 1. **Prerequisites**: Ensure you have [XAMPP](https://www.apachefriends.org/index.html) (or a similar LAMP/WAMP stack) installed with PHP and MySQL running.
 2. **Clone the Repository**:
@@ -42,11 +42,11 @@
 6. **Run the Application**:
    Open your browser and navigate to `http://localhost/splitflix`.
 
-## 👥 Team Members
+## Team Members
 This project was developed by:
 - **Sadman Sakib**
 - **Tanvir Muhtady**
 - **Tanvir Ahmed**
 
-## 📝 License
+## License
 This project was created for educational purposes as part of a university course (CSE370).
