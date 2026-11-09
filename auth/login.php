@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../assets/includes/security.php';
 
 // Redirect if already logged in
 if (isset($_SESSION['user_id'])) {
@@ -15,13 +16,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = trim($_POST['password'] ?? '');
 
     // Validation
-    if (empty($email) || empty($password)) {
+    if (!csrf_validate($_POST['csrf_token'] ?? '')) {
+        $error = "Your session expired. Please refresh the page and try again.";
+    } elseif (empty($email) || empty($password)) {
         $error = "All fields are required.";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = "Please enter a valid Gmail address.";
+        $error = "Please enter a valid email address.";
     } else {
         // Check user credentials
-        $stmt = $conn->prepare("SELECT user_id, name, email, password, role FROM users WHERE email = ?");
+        $stmt = $conn->prepare("SELECT user_id, name, email, password FROM users WHERE email = ?");
         $stmt->bind_param("s", $email);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -30,11 +33,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user = $result->fetch_assoc();
 
             if (password_verify($password, $user['password'])) {
+                // Prevent session fixation
+                session_regenerate_id(true);
+
                 // Set session variables
                 $_SESSION['user_id'] = $user['user_id'];
                 $_SESSION['name']    = $user['name'];
                 $_SESSION['email']   = $user['email'];
-                $_SESSION['role']    = $user['role'];
 
                 header("Location: ../index.php");
                 exit();
@@ -106,8 +111,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php endif; ?>
 
                 <form method="POST" action="" id="loginForm" novalidate>
+                    <?php echo csrf_field(); ?>
                     <div class="input-group">
-                        <label for="email">Gmail Address</label>
+                        <label for="email">Email Address</label>
                         <div class="input-wrapper">
                             <span class="input-icon">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -115,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <polyline points="22,6 12,13 2,6"></polyline>
                                 </svg>
                             </span>
-                            <input type="email" id="email" name="email" placeholder="yourname@gmail.com" 
+                            <input type="email" id="email" name="email" placeholder="you@example.com"
                                    value="<?php echo htmlspecialchars($email ?? ''); ?>" required>
                         </div>
                     </div>

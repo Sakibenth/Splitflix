@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../assets/includes/security.php';
 
 header('Content-Type: application/json');
 
@@ -14,7 +15,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
-$owner_id = $_SESSION['user_id'];
+if (!csrf_validate($_POST['csrf_token'] ?? '')) {
+    csrf_abort_json();
+}
+
+$owner_id = (int)$_SESSION['user_id'];
 $group_id = isset($_POST['group_id']) ? (int)$_POST['group_id'] : 0;
 $description = isset($_POST['description']) ? trim($_POST['description']) : '';
 
@@ -36,7 +41,7 @@ if (!$res || mysqli_num_rows($res) === 0) {
 }
 
 $row = mysqli_fetch_assoc($res);
-if ($row['owner_id'] !== $owner_id) {
+if ((int)$row['owner_id'] !== $owner_id) {
     echo json_encode(['success' => false, 'error' => 'Unauthorized to edit this group']);
     exit();
 }

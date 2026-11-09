@@ -2,6 +2,8 @@
 session_start();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../assets/includes/icons.php';
+require_once __DIR__ . '/../assets/includes/security.php';
+require_once __DIR__ . '/../assets/includes/membership.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../auth/login.php");
@@ -10,15 +12,18 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
+// Apply any leaves that reached their scheduled date
+process_due_leaves($conn);
+
 // Fetch both joined and OWNED groups
 $query = "
     (SELECT gm.joined_at, sg.group_id, sg.group_name, sg.plan_description, sg.cost_per_member, sg.validity_end, sg.status as group_status,
            u.name as owner_name, u.email as owner_email, u.phone as owner_phone, u.user_id as owner_id,
-           p.platform_name, p.logo_emoji, p.brand_color,
+           p.platform_name, p.brand_color,
            'member' as my_role,
            gm.payment_status,
            gm.scheduled_leave_date,
-           (SELECT review_id FROM reviews WHERE group_id = sg.group_id AND reviewer_id = ? AND reviewer_role = 'member') as my_review_id
+           (SELECT review_id FROM reviews WHERE group_id = sg.group_id AND reviewer_id = ? AND reviewee_id = sg.owner_id AND reviewer_role = 'member') as my_review_id
     FROM group_members gm
     JOIN subscription_group sg ON gm.group_id = sg.group_id
     JOIN users u ON sg.owner_id = u.user_id
@@ -29,7 +34,7 @@ $query = "
     
     (SELECT sg.created_at as joined_at, sg.group_id, sg.group_name, sg.plan_description, sg.cost_per_member, sg.validity_end, sg.status as group_status,
            'Me' as owner_name, 'Me' as owner_email, 'Me' as owner_phone, sg.owner_id,
-           p.platform_name, p.logo_emoji, p.brand_color,
+           p.platform_name, p.brand_color,
            'owner' as my_role,
            NULL as payment_status,
            NULL as scheduled_leave_date,
@@ -52,7 +57,7 @@ mysqli_stmt_close($stmt);
 
 // Fetch waitlisted groups
 $waitlist_query = "
-    SELECT gm.*, sg.group_name, p.platform_name, p.logo_emoji, p.brand_color
+    SELECT gm.*, sg.group_name, p.platform_name, p.brand_color
     FROM group_members gm
     JOIN subscription_group sg ON gm.group_id = sg.group_id
     JOIN platforms p ON sg.platform_id = p.platform_id
@@ -284,11 +289,14 @@ foreach ($my_groups as $g) {
         <div class="nav-links">
             <a href="dashboard.php" class="nav-link">Platforms</a>
             <a href="my_groups.php" class="nav-link active">My Groups</a>
+            <a href="../auth/logout.php" class="nav-link">Logout</a>
         </div>
     </nav>
 
     <div class="container">
         <h2 class="section-title"><span>💳</span> My Active Subscriptions</h2>
+
+        <?php echo flash_render(); ?>
         
         <?php if (empty($my_groups)): ?>
             <div class="empty-state" style="padding: 4rem 2rem; background: rgba(255,255,255,0.02); border-radius: 16px; text-align: center;">
@@ -336,9 +344,12 @@ foreach ($my_groups as $g) {
                                 🚪 Leaving <?php echo date('M d, Y', strtotime($group['scheduled_leave_date'])); ?>
                             </span>
                         <?php else: ?>
-                            <a href="leave_group.php?group_id=<?php echo $group['group_id']; ?>"
-                               class="btn-leave"
-                               onclick="return confirm('Schedule your leave from this group? You will stay active until the next billing date.')">🚪 Leave Group</a>
+                            <form method="post" action="leave_group.php" class="inline-form"
+                                  onsubmit="return confirm('Schedule your leave from this group? You will stay active until the next billing date.')">
+                                <?php echo csrf_field(); ?>
+                                <input type="hidden" name="group_id" value="<?php echo (int)$group['group_id']; ?>">
+                                <button type="submit" class="btn-leave">🚪 Leave Group</button>
+                            </form>
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
@@ -352,7 +363,9 @@ foreach ($my_groups as $g) {
                         <?php elseif ($group['my_review_id']): ?>
                             <span style="color: #22c55e; font-size: 0.85rem; font-weight: 600;">✅ Review Submitted</span>
                         <?php else: ?>
-                            <button class="btn-review" onclick="openReviewModal(<?php echo $group['group_id']; ?>, <?php echo $group['owner_id']; ?>, '<?php echo addslashes($group['owner_name']); ?>')">
+                            <button class="btn-review"
+                                    data-owner-name="<?php echo htmlspecialchars($group['owner_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    onclick="openReviewModal(<?php echo (int)$group['group_id']; ?>, <?php echo (int)$group['owner_id']; ?>, this)">
                                 ⭐ Review Owner
                             </button>
                         <?php endif; ?>
@@ -416,7 +429,7 @@ foreach ($my_groups as $g) {
                                         <textarea id="rd-<?php echo $gid; ?>" placeholder="netflix niye bhab barse?"></textarea>
                                     </div>
                                 </div>
-                                <button class="btn-rec-submit" onclick="postRec(<?php echo $gid; ?>)">Post Recommendation</button>
+                                <button class="btn-rec-submit" onclick="postRec(<?php echo $gid; ?>, this)">Post Recommendation</button>
                             </div>
 
                             <!-- Recommendations list -->
@@ -500,6 +513,7 @@ foreach ($my_groups as $g) {
             <p style="color: #8888aa; font-size: 0.9rem;">How was your experience sharing with this owner?</p>
             
             <form action="submit_review.php" method="POST">
+                <?php echo csrf_field(); ?>
                 <input type="hidden" id="modalGroupId" name="group_id">
                 <input type="hidden" id="modalRevieweeId" name="reviewee_id">
                 <input type="hidden" name="role" value="member">
@@ -523,10 +537,12 @@ foreach ($my_groups as $g) {
     </div>
 
     <script>
-        function openReviewModal(groupId, ownerId, ownerName) {
+        const CSRF_TOKEN = <?php echo json_encode(csrf_token()); ?>;
+
+        function openReviewModal(groupId, ownerId, btn) {
             document.getElementById('modalGroupId').value = groupId;
             document.getElementById('modalRevieweeId').value = ownerId;
-            document.getElementById('modalTitle').textContent = 'Review ' + ownerName;
+            document.getElementById('modalTitle').textContent = 'Review ' + (btn.dataset.ownerName || 'Owner');
             document.getElementById('reviewModal').style.display = 'flex';
         }
 
@@ -563,19 +579,18 @@ foreach ($my_groups as $g) {
             setTimeout(() => { el.style.display = 'none'; }, 4000);
         }
 
-        function postRec(gid) {
+        function postRec(gid, btn) {
             const title    = document.getElementById('rt-' + gid).value.trim();
             const genre    = document.getElementById('rg-' + gid).value;
             const platform = document.getElementById('rp-' + gid).value.trim();
             const desc     = document.getElementById('rd-' + gid).value.trim();
             if (!title) { showRecAlert(gid, 'Please enter a title.', 'error'); return; }
-            const btn = event.target;
             btn.textContent = 'Posting...';
             btn.disabled = true;
             fetch('add_recommendation.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `group_id=${gid}&title=${encodeURIComponent(title)}&genre=${encodeURIComponent(genre)}&platform_hint=${encodeURIComponent(platform)}&description=${encodeURIComponent(desc)}`
+                body: `csrf_token=${encodeURIComponent(CSRF_TOKEN)}&group_id=${gid}&title=${encodeURIComponent(title)}&genre=${encodeURIComponent(genre)}&platform_hint=${encodeURIComponent(platform)}&description=${encodeURIComponent(desc)}`
             })
             .then(r => r.json())
             .then(data => {
@@ -673,7 +688,7 @@ foreach ($my_groups as $g) {
             fetch('send_chat.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `group_id=${gid}&message=${encodeURIComponent(msg)}`
+                body: `csrf_token=${encodeURIComponent(CSRF_TOKEN)}&group_id=${gid}&message=${encodeURIComponent(msg)}`
             })
             .then(r => r.json())
             .then(data => {

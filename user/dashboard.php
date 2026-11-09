@@ -2,6 +2,8 @@
 session_start();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../assets/includes/icons.php';
+require_once __DIR__ . '/../assets/includes/security.php';
+require_once __DIR__ . '/../assets/includes/membership.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../auth/login.php");
@@ -21,6 +23,9 @@ if (!$user_check_res || mysqli_num_rows($user_check_res) === 0) {
     exit();
 }
 mysqli_stmt_close($user_check_stmt);
+
+// Apply any leaves that reached their scheduled date
+process_due_leaves($conn);
 
 // Fetch platforms from database
 $platforms = [];
@@ -67,7 +72,7 @@ if ($result) {
         <div class="nav-links">
             <a href="dashboard.php" class="nav-link active">Platforms</a>
             <a href="my_groups.php" class="nav-link">My Subscriptions</a>
-            <a href="#" class="nav-link">Payments</a>
+            <a href="../auth/logout.php" class="nav-link">Logout</a>
         </div>
     </nav>
 
@@ -79,6 +84,8 @@ if ($result) {
                 <p>Choose a platform to find available groups and start saving</p>
             </div>
         </div>
+
+        <?php echo flash_render(); ?>
 
         <!-- Platform Grid -->
         <div class="platform-grid">

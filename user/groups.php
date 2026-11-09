@@ -2,6 +2,8 @@
 session_start();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../assets/includes/icons.php';
+require_once __DIR__ . '/../assets/includes/security.php';
+require_once __DIR__ . '/../assets/includes/membership.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../auth/login.php");
@@ -16,6 +18,9 @@ if (!$platform_id) {
 }
 
 $user_id = $_SESSION['user_id'];
+
+// Apply any leaves that reached their scheduled date
+process_due_leaves($conn);
 
 // Fetch platform info
 $platform_query = "SELECT * FROM platforms WHERE platform_id = ?";
@@ -149,6 +154,7 @@ $brand_color = htmlspecialchars($platform['brand_color'] ?? '#e50914');
         <div class="nav-links">
             <a href="dashboard.php" class="nav-link">Platforms</a>
             <a href="my_groups.php" class="nav-link">My Groups</a>
+            <a href="../auth/logout.php" class="nav-link">Logout</a>
         </div>
     </nav>
 
@@ -162,6 +168,8 @@ $brand_color = htmlspecialchars($platform['brand_color'] ?? '#e50914');
                 </div>
             </div>
         </div>
+
+        <?php echo flash_render(); ?>
 
         <?php if (empty($groups)): ?>
             <div class="empty-state">
@@ -229,7 +237,7 @@ $brand_color = htmlspecialchars($platform['brand_color'] ?? '#e50914');
 
                     <div class="group-stats-grid">
                         <div class="stat-item">
-                            <span class="stat-label">Join Date</span>
+                            <span class="stat-label">Next Billing</span>
                             <span class="stat-val"><?php echo $next_join_display; ?></span>
                         </div>
                         <div class="stat-item">
@@ -249,9 +257,17 @@ $brand_color = htmlspecialchars($platform['brand_color'] ?? '#e50914');
                     <?php elseif ($group['my_status'] === 'waitlisted'): ?>
                         <button class="btn-join" style="background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.3); cursor: default;" disabled>Waiting for Approval</button>
                     <?php elseif ($is_full): ?>
-                        <a href="join_group.php?group_id=<?php echo $group['group_id']; ?>" class="btn-join" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">Join Waitlist (Full)</a>
+                        <form method="post" action="join_group.php" class="inline-form">
+                            <?php echo csrf_field(); ?>
+                            <input type="hidden" name="group_id" value="<?php echo (int)$group['group_id']; ?>">
+                            <button type="submit" class="btn-join" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">Join Waitlist (Full)</button>
+                        </form>
                     <?php else: ?>
-                        <a href="join_group.php?group_id=<?php echo $group['group_id']; ?>" class="btn-join">Request to Join</a>
+                        <form method="post" action="join_group.php" class="inline-form">
+                            <?php echo csrf_field(); ?>
+                            <input type="hidden" name="group_id" value="<?php echo (int)$group['group_id']; ?>">
+                            <button type="submit" class="btn-join">Request to Join</button>
+                        </form>
                     <?php endif; ?>
                 </div>
                 <?php endforeach; ?>

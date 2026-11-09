@@ -2,6 +2,8 @@
 session_start();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../assets/includes/icons.php';
+require_once __DIR__ . '/../assets/includes/security.php';
+require_once __DIR__ . '/../assets/includes/membership.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../auth/login.php");
@@ -16,9 +18,12 @@ if (!$group_id) {
     exit();
 }
 
+// Apply any leaves that reached their scheduled date
+process_due_leaves($conn);
+
 // Fetch Group Details
 $group_query = "
-    SELECT sg.*, p.platform_name, p.logo_emoji, p.brand_color, u.name as owner_name, u.email as owner_email, u.phone as owner_phone
+    SELECT sg.*, p.platform_name, p.brand_color, u.name as owner_name, u.email as owner_email, u.phone as owner_phone
     FROM subscription_group sg
     JOIN platforms p ON sg.platform_id = p.platform_id
     JOIN users u ON sg.owner_id = u.user_id
@@ -135,6 +140,29 @@ while ($row = mysqli_fetch_assoc($n_res)) {
     $notifs[] = $row;
 }
 mysqli_stmt_close($n_stmt);
+
+// Feature 8: Fetch the latest group chat messages
+$group_chats = [];
+$last_chat_id = 0;
+$chat_stmt = mysqli_prepare($conn, "
+    SELECT gc.message_id, gc.message, gc.created_at, gc.user_id, u.name
+    FROM group_chat gc
+    JOIN users u ON gc.user_id = u.user_id
+    WHERE gc.group_id = ?
+    ORDER BY gc.created_at ASC
+    LIMIT 50
+");
+mysqli_stmt_bind_param($chat_stmt, "i", $group_id);
+mysqli_stmt_execute($chat_stmt);
+$chat_res = mysqli_stmt_get_result($chat_stmt);
+while ($row = mysqli_fetch_assoc($chat_res)) {
+    $group_chats[] = $row;
+}
+mysqli_stmt_close($chat_stmt);
+if (!empty($group_chats)) {
+    $last_chat = end($group_chats);
+    $last_chat_id = (int)$last_chat['message_id'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -230,6 +258,14 @@ mysqli_stmt_close($n_stmt);
         .side-panel-content {
             padding: 1rem 1.5rem;
         }
+        .side-panel-accordion th,
+        .side-panel-accordion td {
+            padding: 0.9rem 1rem;
+        }
+        .side-panel-accordion .btn-action,
+        .side-panel-accordion .cancel-leave-btn {
+            white-space: nowrap;
+        }
 
         .stats-panel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 3rem; }
         .stat-card { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 12px; display: flex; flex-direction: column; }
@@ -293,17 +329,73 @@ mysqli_stmt_close($n_stmt);
         .notif-alert { padding: 10px 14px; border-radius: 8px; font-size: 0.88rem; font-weight: 500; margin-bottom: 10px; display: none; }
         .notif-alert-success { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
         .notif-alert-error { background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+        .leaving-date-badge {
             display: inline-flex; align-items: center; gap: 6px;
             background: rgba(239, 68, 68, 0.1); color: #f87171;
             padding: 5px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600;
             border: 1px solid rgba(239, 68, 68, 0.25);
         }
-        .cancel-leave-btn {
-            background: none; border: none; color: #8888aa; font-size: 0.8rem;
-            text-decoration: underline; cursor: pointer; margin-left: 12px;
-            transition: color 0.2s;
+
+        /* ---- Group chat (owner view) ---- */
+        .owner-chat {
+            display: flex;
+            flex-direction: column;
+            height: 380px;
         }
-        .cancel-leave-btn:hover { color: #22c55e; }
+        .owner-chat .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 4px 2px 12px 2px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.1) transparent;
+        }
+        .owner-chat .chat-messages::-webkit-scrollbar { width: 4px; }
+        .owner-chat .chat-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
+        .owner-chat .chat-msg { display: flex; gap: 10px; align-items: flex-start; }
+        .owner-chat .chat-msg.mine { flex-direction: row-reverse; }
+        .owner-chat .chat-avatar {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: rgba(255,255,255,0.08);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.8rem; font-weight: 700; color: #f0f0f5; flex-shrink: 0;
+        }
+        .owner-chat .chat-bubble-wrap { max-width: 75%; }
+        .owner-chat .chat-name { font-size: 0.72rem; color: #8888aa; margin-bottom: 3px; font-weight: 600; }
+        .owner-chat .chat-msg.mine .chat-name { text-align: right; }
+        .owner-chat .chat-bubble {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 12px 12px 12px 4px; padding: 8px 12px;
+            font-size: 0.9rem; color: #e0e0f0; line-height: 1.45; word-break: break-word;
+        }
+        .owner-chat .chat-msg.mine .chat-bubble {
+            background: <?php echo $brand_color; ?>22;
+            border-color: <?php echo $brand_color; ?>44;
+            border-radius: 12px 12px 4px 12px;
+        }
+        .owner-chat .chat-time { font-size: 0.7rem; color: #666688; margin-top: 3px; }
+        .owner-chat .chat-msg.mine .chat-time { text-align: right; }
+        .owner-chat .chat-empty { text-align: center; color: #8888aa; font-size: 0.88rem; padding: 2rem 0; margin: auto; }
+        .owner-chat .chat-compose {
+            display: flex; gap: 8px; padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.06); margin-top: 4px;
+        }
+        .owner-chat .chat-input {
+            flex: 1; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px; color: #f0f0f5; padding: 9px 12px;
+            font-size: 0.9rem; font-family: inherit; resize: none; height: 40px;
+            transition: border-color 0.2s;
+        }
+        .owner-chat .chat-input:focus { outline: none; border-color: <?php echo $brand_color; ?>; }
+        .owner-chat .chat-send-btn {
+            background: <?php echo $brand_color; ?>; color: #fff; border: none;
+            border-radius: 8px; padding: 0 16px; font-size: 0.88rem;
+            font-weight: 700; cursor: pointer; white-space: nowrap;
+        }
+        .owner-chat .chat-send-btn:hover { filter: brightness(1.1); }
+        .owner-chat .chat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .payment-link-container {
             background: rgba(255, 255, 255, 0.02);
@@ -351,13 +443,14 @@ mysqli_stmt_close($n_stmt);
 <body>
     <nav class="top-nav">
         <div class="nav-brand">
-            <a href="../auth/logout.php" class="nav-brand-link">
+            <a href="dashboard.php" class="nav-brand-link">
                 <span class="nav-logo">🎬</span>
                 <span class="nav-title">Splitflix</span>
             </a>
         </div>
         <div class="nav-links">
             <a href="dashboard.php" class="nav-link active">My Groups</a>
+            <a href="../auth/logout.php" class="nav-link">Logout</a>
         </div>
     </nav>
 
@@ -369,6 +462,15 @@ mysqli_stmt_close($n_stmt);
             </svg>
             Back to Dashboard
         </a>
+
+        <?php echo flash_render(); ?>
+
+        <?php if (!empty($waitlisted_members)): ?>
+            <div class="flash" style="background: rgba(234, 179, 8, 0.12); color: #facc15; border-color: rgba(234, 179, 8, 0.35);">
+                <strong><?php echo count($waitlisted_members); ?> pending join request<?php echo count($waitlisted_members) === 1 ? '' : 's'; ?>.</strong>
+                <a href="#waitlist-queue" style="color: #fff; text-decoration: underline; margin-left: 6px;">Open the waitlist queue</a> to accept or review the request.
+            </div>
+        <?php endif; ?>
 
         <div class="dashboard-layout">
             <div class="main-column">
@@ -483,9 +585,15 @@ mysqli_stmt_close($n_stmt);
                                         <?php if ($member['owner_review_id']): ?>
                                             <span style="color: #22c55e; margin-left: 8px;">✓ Reviewed</span>
                                         <?php else: ?>
-                                            <button onclick="openOwnerReviewModal(<?php echo $group_id; ?>, <?php echo $member['user_id']; ?>, '<?php echo addslashes($member['name']); ?>')" style="background: none; border: none; color: #eab308; cursor: pointer; padding: 0; font-size: 0.8rem; text-decoration: underline; margin-left: 8px;">Review Member</button>
+                                            <button type="button"
+                                                    data-member-name="<?php echo htmlspecialchars($member['name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                    onclick="openOwnerReviewModal(<?php echo (int)$group_id; ?>, <?php echo (int)$member['user_id']; ?>, this)"
+                                                    style="background: none; border: none; color: #eab308; cursor: pointer; padding: 0; font-size: 0.8rem; text-decoration: underline; margin-left: 8px;">Review Member</button>
                                         <?php endif; ?>
-                                        <button onclick="removeMember(<?php echo $member['membership_id']; ?>, '<?php echo addslashes($member['name']); ?>')" style="background: none; border: none; color: #ff4444; cursor: pointer; padding: 0; font-size: 0.8rem; text-decoration: underline; margin-left: 12px;">Remove</button>
+                                        <button type="button"
+                                                data-member-name="<?php echo htmlspecialchars($member['name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                onclick="removeMember(<?php echo (int)$member['membership_id']; ?>, this)"
+                                                style="background: none; border: none; color: #ff4444; cursor: pointer; padding: 0; font-size: 0.8rem; text-decoration: underline; margin-left: 12px;">Remove</button>
                                     </div>
                                 </td>
                                 <td>
@@ -517,7 +625,7 @@ mysqli_stmt_close($n_stmt);
 
             <div class="side-column">
                 <!-- Waitlist Queue Accordion -->
-                <details class="side-panel-accordion">
+                <details class="side-panel-accordion" id="waitlist-queue" <?php echo !empty($waitlisted_members) ? 'open' : ''; ?>>
                     <summary>Waitlist Queue <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff; padding: 2px 8px; border-radius: 12px; margin-left: 10px;"><?php echo count($waitlisted_members); ?> Waiting</span></summary>
                     <div class="side-panel-content" style="padding: 0;">
                         <div class="members-table-container" style="border: none; margin: 0; border-radius: 0;">
@@ -525,66 +633,59 @@ mysqli_stmt_close($n_stmt);
                                 <div class="empty-members" style="padding: 2rem;">
                                     <p style="margin: 0;">The waitlist is currently empty.</p>
                                 </div>
-            <?php else: ?>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Requested By</th>
-                            <th>Contact</th>
-                            <th>Request Time</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($waitlisted_members as $index => $member): 
-                            $m_rating = $member['member_rating'] ? round($member['member_rating'], 1) : null;
-                        ?>
-                            <tr>
-                                <td>
-                                    <strong style="color: #8888aa;"><?php echo $index + 1; ?></strong>
-                                </td>
-                                <td>
-                                    <div style="font-weight: 600;"><?php echo htmlspecialchars($member['name']); ?></div>
-                                    <div class="member-meta">
-                                        <?php if ($m_rating): ?>
-                                            <span style="color: #eab308;">⭐ <?php echo $m_rating; ?></span>
-                                            <span style="font-size: 0.75rem;">(<?php echo $member['review_count']; ?> reviews)</span>
-                                        <?php else: ?>
-                                            <span style="color: #666; font-size: 0.75rem;">New Member (No reviews)</span>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div><?php echo htmlspecialchars($member['email']); ?></div>
-                                </td>
-                                <td>
-                                    <?php echo date('M d, g:i A', strtotime($member['joined_at'])); ?>
-                                </td>
-                                <td>
-                                    <?php if (!$is_accepting_window): ?>
-                                        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #888; cursor: not-allowed;" disabled title="Can only accept within 7 days of the billing date">
-                                            Wait until <?php echo $next_billing_display; ?>
-                                        </button>
-                                    <?php else: ?>
-                                        <button class="btn-action" 
-                                                onclick="acceptMember(<?php echo $member['membership_id']; ?>, this)"
-                                                <?php echo !$is_accepting ? 'disabled title="Cannot accept, group is full"' : ''; ?>>
-                                            Accept
-                                        </button>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            <?php endif; ?>
+                            <?php else: ?>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Requested By</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($waitlisted_members as $index => $member):
+                                            $m_rating = $member['member_rating'] ? round($member['member_rating'], 1) : null;
+                                        ?>
+                                            <tr>
+                                                <td>
+                                                    <div style="font-weight: 600;">
+                                                        <span style="color: #8888aa;">#<?php echo $index + 1; ?></span>
+                                                        <?php echo htmlspecialchars($member['name']); ?>
+                                                    </div>
+                                                    <div class="member-meta">
+                                                        <?php if ($m_rating): ?>
+                                                            <span style="color: #eab308;">⭐ <?php echo $m_rating; ?></span>
+                                                            <span style="font-size: 0.75rem;">(<?php echo (int)$member['review_count']; ?> reviews)</span>
+                                                        <?php else: ?>
+                                                            <span style="color: #666; font-size: 0.75rem;">New member (no reviews)</span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <div class="member-meta"><?php echo htmlspecialchars($member['email']); ?></div>
+                                                    <div class="member-meta">🕐 <?php echo date('M d, g:i A', strtotime($member['joined_at'])); ?></div>
+                                                </td>
+                                                <td>
+                                                    <?php if (!$is_accepting_window): ?>
+                                                        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #888; cursor: not-allowed;" disabled title="Can only accept within 7 days of the billing date">
+                                                            Wait until <?php echo $next_billing_display; ?>
+                                                        </button>
+                                                    <?php else: ?>
+                                                        <button class="btn-action"
+                                                                onclick="acceptMember(<?php echo (int)$member['membership_id']; ?>, this)"
+                                                                <?php echo !$is_accepting ? 'disabled title="Cannot accept, group is full"' : ''; ?>>
+                                                            Accept
+                                                        </button>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </details>
 
         <!-- Leaving Queue -->
-                <details class="side-panel-accordion">
+                <details class="side-panel-accordion" <?php echo !empty($leaving_members) ? 'open' : ''; ?>>
                     <summary>🚪 Leaving Queue <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; padding: 2px 8px; border-radius: 12px; margin-left: 10px;"><?php echo count($leaving_members); ?> Scheduled</span></summary>
                     <div class="side-panel-content" style="padding: 0;">
                         <div class="members-table-container" style="border: none; margin: 0; border-radius: 0;">
@@ -593,42 +694,38 @@ mysqli_stmt_close($n_stmt);
                                     <p style="margin: 0;">No members have scheduled to leave.</p>
                                 </div>
                             <?php else: ?>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Member</th>
-                            <th>Contact</th>
-                            <th>Leaving On</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($leaving_members as $lm): ?>
-                            <tr>
-                                <td>
-                                    <div style="font-weight: 600;"><?php echo htmlspecialchars($lm['name']); ?></div>
-                                </td>
-                                <td>
-                                    <div><?php echo htmlspecialchars($lm['email']); ?></div>
-                                    <?php if (!empty($lm['phone'])): ?>
-                                        <div class="member-meta">📞 <?php echo htmlspecialchars($lm['phone']); ?></div>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <span class="leaving-date-badge">
-                                        📅 <?php echo date('M d, Y', strtotime($lm['scheduled_leave_date'])); ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <button class="cancel-leave-btn" onclick="cancelLeave(<?php echo $lm['membership_id']; ?>, '<?php echo addslashes($lm['name']); ?>')">
-                                        ✕ Cancel Leave
-                                    </button>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            <?php endif; ?>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Member</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($leaving_members as $lm): ?>
+                                            <tr>
+                                                <td>
+                                                    <div style="font-weight: 600;"><?php echo htmlspecialchars($lm['name']); ?></div>
+                                                    <div class="member-meta"><?php echo htmlspecialchars($lm['email']); ?></div>
+                                                    <?php if (!empty($lm['phone'])): ?>
+                                                        <div class="member-meta">📞 <?php echo htmlspecialchars($lm['phone']); ?></div>
+                                                    <?php endif; ?>
+                                                    <span class="leaving-date-badge" style="margin-top: 6px;">
+                                                        📅 <?php echo date('M d, Y', strtotime($lm['scheduled_leave_date'])); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <button type="button" class="cancel-leave-btn"
+                                                            data-member-name="<?php echo htmlspecialchars($lm['name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                            onclick="cancelLeave(<?php echo (int)$lm['membership_id']; ?>, this)">
+                                                        ✕ Cancel Leave
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </details>
@@ -641,7 +738,7 @@ mysqli_stmt_close($n_stmt);
                 <label>Broadcast a message to your group members</label>
                 <div id="notif-alert" class="notif-alert"></div>
                 <textarea id="notif-message" placeholder="e.g. time moton taka na dile rog kata hobe"></textarea>
-                <button class="btn-action" onclick="postNotification()">📣 Post Notification</button>
+                <button class="btn-action" onclick="postNotification(this)">📣 Post Notification</button>
             </div>
             <div class="notif-list" id="notif-list">
                 <?php if (empty($notifs)): ?>
@@ -659,6 +756,39 @@ mysqli_stmt_close($n_stmt);
                 <?php endif; ?>
             </div>
                         </div>
+                </details>
+
+                <!-- Group chat (owner view) -->
+                <details class="side-panel-accordion" id="group-chat"
+                         ontoggle="if (this.open) startChat(<?php echo (int)$group_id; ?>)">
+                    <summary>💬 Group Chat <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff; padding: 2px 8px; border-radius: 12px; margin-left: 10px;"><?php echo count($group_chats); ?> messages</span></summary>
+                    <div class="side-panel-content" style="padding: 1rem 1.25rem;">
+                        <div class="owner-chat">
+                            <div class="chat-messages" id="chat-msgs-<?php echo (int)$group_id; ?>">
+                                <?php if (empty($group_chats)): ?>
+                                    <div class="chat-empty" id="chat-empty-<?php echo (int)$group_id; ?>">No messages yet. Say hello to your group! 👋</div>
+                                <?php else: ?>
+                                    <?php foreach ($group_chats as $cm):
+                                        $initials = strtoupper(substr($cm['name'], 0, 1));
+                                        $is_mine = ((int)$cm['user_id'] === (int)$owner_id);
+                                    ?>
+                                        <div class="chat-msg <?php echo $is_mine ? 'mine' : ''; ?>" id="cmsg-<?php echo (int)$cm['message_id']; ?>">
+                                            <div class="chat-avatar"><?php echo htmlspecialchars($initials); ?></div>
+                                            <div class="chat-bubble-wrap">
+                                                <div class="chat-name"><?php echo $is_mine ? 'You (owner)' : htmlspecialchars($cm['name']); ?></div>
+                                                <div class="chat-bubble"><?php echo nl2br(htmlspecialchars($cm['message'])); ?></div>
+                                                <div class="chat-time"><?php echo date('M d, g:i A', strtotime($cm['created_at'])); ?></div>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                            <div class="chat-compose">
+                                <textarea class="chat-input" id="chat-input-<?php echo (int)$group_id; ?>" placeholder="Message your group..." rows="1"
+                                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat(<?php echo (int)$group_id; ?>);}"></textarea>
+                                <button type="button" class="chat-send-btn" onclick="sendChat(<?php echo (int)$group_id; ?>)">Send</button>
+                            </div>
+                        </div>
                     </div>
                 </details>
             </div> <!-- End Side Column -->
@@ -672,6 +802,7 @@ mysqli_stmt_close($n_stmt);
             <p style="color: #8888aa; font-size: 0.9rem; margin-bottom: 1rem;">Review this member's payment discipline and cooperation.</p>
             
             <form action="../user/submit_review.php" method="POST">
+                <?php echo csrf_field(); ?>
                 <input type="hidden" id="ownerModalGroupId" name="group_id">
                 <input type="hidden" id="ownerModalRevieweeId" name="reviewee_id">
                 <input type="hidden" name="role" value="owner">
@@ -695,7 +826,13 @@ mysqli_stmt_close($n_stmt);
     </div>
 
     <script>
-        function openOwnerReviewModal(groupId, memberId, memberName) {
+        const CSRF_TOKEN = <?php echo json_encode(csrf_token()); ?>;
+        const chatPollers = {};
+        const lastMsgIds = {};
+        lastMsgIds[<?php echo (int)$group_id; ?>] = <?php echo (int)$last_chat_id; ?>;
+
+        function openOwnerReviewModal(groupId, memberId, btn) {
+            const memberName = btn.dataset.memberName || 'Member';
             document.getElementById('ownerModalGroupId').value = groupId;
             document.getElementById('ownerModalRevieweeId').value = memberId;
             document.getElementById('ownerModalTitle').textContent = 'Review ' + memberName;
@@ -712,7 +849,7 @@ mysqli_stmt_close($n_stmt);
             fetch('update_payment.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `membership_id=${membershipId}&status=${newStatus}`
+                body: `csrf_token=${encodeURIComponent(CSRF_TOKEN)}&membership_id=${membershipId}&status=${newStatus}`
             })
             .then(res => res.json())
             .then(data => {
@@ -740,12 +877,12 @@ mysqli_stmt_close($n_stmt);
             fetch('update_description.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `group_id=<?php echo $group_id; ?>&description=${encodeURIComponent(newDesc)}`
+                body: `csrf_token=${encodeURIComponent(CSRF_TOKEN)}&group_id=<?php echo (int)$group_id; ?>&description=${encodeURIComponent(newDesc)}`
             })
             .then(res => res.json())
             .then(data => {
                 if(data.success) {
-                    document.getElementById('plan-text').innerHTML = newDesc.replace(/\n/g, '<br>');
+                    document.getElementById('plan-text').innerHTML = escHtml(newDesc).replace(/\n/g, '<br>');
                     toggleEdit();
                 } else alert('Failed: ' + data.error);
             }).finally(() => { btn.textContent = 'Save'; btn.disabled = false; });
@@ -762,7 +899,7 @@ mysqli_stmt_close($n_stmt);
             fetch('update_payment_link.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `group_id=<?php echo $group_id; ?>&payment_link=${encodeURIComponent(link)}`
+                body: `csrf_token=${encodeURIComponent(CSRF_TOKEN)}&group_id=<?php echo (int)$group_id; ?>&payment_link=${encodeURIComponent(link)}`
             })
             .then(res => res.json())
             .then(data => {
@@ -787,13 +924,14 @@ mysqli_stmt_close($n_stmt);
             });
         }
 
-        function removeMember(membershipId, memberName) {
+        function removeMember(membershipId, btn) {
+            const memberName = btn.dataset.memberName || 'this member';
             if(!confirm(`Are you sure you want to remove ${memberName} from the group? This will free up their seat.`)) return;
             
             fetch('remove_member.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `membership_id=${membershipId}&group_id=<?php echo $group_id; ?>`
+                body: `csrf_token=${encodeURIComponent(CSRF_TOKEN)}&membership_id=${membershipId}&group_id=<?php echo (int)$group_id; ?>`
             })
             .then(res => res.json())
             .then(data => {
@@ -810,15 +948,13 @@ mysqli_stmt_close($n_stmt);
         }
 
         function acceptMember(membershipId, btn) {
-            if(!confirm("Are you sure you want to accept this member into the group?")) return;
-            
             btn.textContent = 'Accepting...';
             btn.disabled = true;
             
             fetch('accept_member.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `membership_id=${membershipId}&group_id=<?php echo $group_id; ?>`
+                body: `csrf_token=${encodeURIComponent(CSRF_TOKEN)}&membership_id=${membershipId}&group_id=<?php echo (int)$group_id; ?>`
             })
             .then(res => res.json())
             .then(data => {
@@ -838,12 +974,13 @@ mysqli_stmt_close($n_stmt);
             });
         }
 
-        function cancelLeave(membershipId, memberName) {
+        function cancelLeave(membershipId, btn) {
+            const memberName = btn.dataset.memberName || 'this member';
             if (!confirm(`Cancel ${memberName}'s scheduled leave? They will remain in the group.`)) return;
             fetch('cancel_leave.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `membership_id=${membershipId}&group_id=<?php echo $group_id; ?>`
+                body: `csrf_token=${encodeURIComponent(CSRF_TOKEN)}&membership_id=${membershipId}&group_id=<?php echo (int)$group_id; ?>`
             })
             .then(res => res.json())
             .then(data => {
@@ -866,16 +1003,15 @@ mysqli_stmt_close($n_stmt);
             setTimeout(() => { el.style.display = 'none'; }, 4000);
         }
 
-        function postNotification() {
+        function postNotification(btn) {
             const msg = document.getElementById('notif-message').value.trim();
             if (!msg) { showNotifAlert('Please write a message before posting.', 'error'); return; }
-            const btn = event.target;
             btn.textContent = 'Posting...';
             btn.disabled = true;
             fetch('post_notification.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `group_id=<?php echo $group_id; ?>&message=${encodeURIComponent(msg)}`
+                body: `csrf_token=${encodeURIComponent(CSRF_TOKEN)}&group_id=<?php echo (int)$group_id; ?>&message=${encodeURIComponent(msg)}`
             })
             .then(r => r.json())
             .then(data => {
@@ -908,7 +1044,7 @@ mysqli_stmt_close($n_stmt);
             fetch('delete_notification.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `notification_id=${id}`
+                body: `csrf_token=${encodeURIComponent(CSRF_TOKEN)}&notification_id=${id}`
             })
             .then(r => r.json())
             .then(data => {
@@ -922,6 +1058,74 @@ mysqli_stmt_close($n_stmt);
                     alert('Failed to delete: ' + (data.error || 'Unknown'));
                 }
             });
+        }
+
+        // ---- Group chat (owner view) ----
+        function startChat(gid) {
+            setTimeout(() => scrollChatBottom(gid), 50);
+            if (chatPollers[gid]) return;
+            pollChat(gid);
+            chatPollers[gid] = setInterval(() => pollChat(gid), 4000);
+        }
+
+        function scrollChatBottom(gid) {
+            const box = document.getElementById('chat-msgs-' + gid);
+            if (box) box.scrollTop = box.scrollHeight;
+        }
+
+        function pollChat(gid) {
+            const lastId = lastMsgIds[gid] || 0;
+            fetch(`../user/chat_messages.php?group_id=${gid}&after=${lastId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success || !data.messages.length) return;
+                    const box = document.getElementById('chat-msgs-' + gid);
+                    const empty = document.getElementById('chat-empty-' + gid);
+                    if (empty) empty.remove();
+                    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+                    data.messages.forEach(m => {
+                        if (document.getElementById('cmsg-' + m.message_id)) return;
+                        const div = document.createElement('div');
+                        div.className = 'chat-msg' + (m.is_mine ? ' mine' : '');
+                        div.id = 'cmsg-' + m.message_id;
+                        div.innerHTML = `
+                            <div class="chat-avatar">${escHtml(m.initials)}</div>
+                            <div class="chat-bubble-wrap">
+                                <div class="chat-name">${m.is_mine ? 'You (owner)' : escHtml(m.name)}</div>
+                                <div class="chat-bubble">${escHtml(m.message).replace(/\n/g, '<br>')}</div>
+                                <div class="chat-time">${escHtml(m.created_at)}</div>
+                            </div>`;
+                        box.appendChild(div);
+                        lastMsgIds[gid] = m.message_id;
+                    });
+                    if (atBottom) scrollChatBottom(gid);
+                })
+                .catch(() => {});
+        }
+
+        function sendChat(gid) {
+            const input = document.getElementById('chat-input-' + gid);
+            const msg = input.value.trim();
+            if (!msg) return;
+            const btn = input.nextElementSibling;
+            btn.disabled = true;
+            input.disabled = true;
+            fetch('../user/send_chat.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `csrf_token=${encodeURIComponent(CSRF_TOKEN)}&group_id=${gid}&message=${encodeURIComponent(msg)}`
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    input.value = '';
+                    pollChat(gid);
+                } else {
+                    alert(data.error || 'Failed to send message.');
+                }
+            })
+            .catch(() => alert('Network error.'))
+            .finally(() => { btn.disabled = false; input.disabled = false; input.focus(); });
         }
 
         function escHtml(s) {

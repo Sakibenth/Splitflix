@@ -21,10 +21,13 @@ if (!isset($_SESSION['user_id'])) {
     <!-- Top Nav -->
     <nav class="top-nav">
         <div class="nav-brand">
-            <a href="auth/logout.php" class="nav-brand-link">
+            <a href="index.php" class="nav-brand-link">
                 <span class="nav-logo">🎬</span>
                 <span class="nav-title">Splitflix</span>
             </a>
+        </div>
+        <div class="nav-links">
+            <a href="auth/logout.php" class="nav-link">Logout</a>
         </div>
     </nav>
 

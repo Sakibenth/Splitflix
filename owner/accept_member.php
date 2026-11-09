@@ -1,6 +1,8 @@
 <?php
 session_start();
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../assets/includes/security.php';
+require_once __DIR__ . '/../assets/includes/membership.php';
 
 header('Content-Type: application/json');
 
@@ -14,7 +16,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
-$owner_id = $_SESSION['user_id'];
+if (!csrf_validate($_POST['csrf_token'] ?? '')) {
+    csrf_abort_json();
+}
+
+$owner_id = (int)$_SESSION['user_id'];
 $membership_id = isset($_POST['membership_id']) ? (int)$_POST['membership_id'] : 0;
 $group_id = isset($_POST['group_id']) ? (int)$_POST['group_id'] : 0;
 
@@ -43,7 +49,7 @@ if (!$res || mysqli_num_rows($res) === 0) {
 $group = mysqli_fetch_assoc($res);
 mysqli_stmt_close($stmt);
 
-if ($group['owner_id'] !== $owner_id) {
+if ((int)$group['owner_id'] !== $owner_id) {
     echo json_encode(['success' => false, 'error' => 'Unauthorized']);
     exit();
 }
@@ -102,12 +108,8 @@ try {
     }
     mysqli_stmt_close($stmt1);
 
-    // 4. Update seats remaining
-    $update_group = "UPDATE subscription_group SET seats_remaining = seats_remaining - 1 WHERE group_id = ?";
-    $stmt2 = mysqli_prepare($conn, $update_group);
-    mysqli_stmt_bind_param($stmt2, "i", $group_id);
-    mysqli_stmt_execute($stmt2);
-    mysqli_stmt_close($stmt2);
+    // 4. Keep seats consistent with the real active member count
+    recalculate_seats($conn, $group_id);
 
     // 5. Delete waitlist requests for this user in all other groups
     $delete_waitlist = "DELETE FROM group_members WHERE user_id = ? AND group_id != ? AND membership_status = 'waitlisted'";

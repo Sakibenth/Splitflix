@@ -1,5 +1,9 @@
 -- Splitflix Database Setup
 -- CSE370 Lab Project
+--
+-- LEGACY / HISTORICAL SCRIPT - do not use for a new install.
+-- Use sql/full_setup.sql instead. This file reflects an earlier schema
+-- (plan_id, users.role, platforms.logo_emoji) and is kept for history.
 
 CREATE DATABASE IF NOT EXISTS splitflix;
 USE splitflix;

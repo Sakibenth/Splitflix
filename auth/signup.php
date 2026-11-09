@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../assets/includes/security.php';
 
 // Redirect if already logged in
 if (isset($_SESSION['user_id'])) {
@@ -17,10 +18,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = trim($_POST['password'] ?? '');
 
     // Validation
-    if (empty($name) || empty($email) || empty($password)) {
+    if (!csrf_validate($_POST['csrf_token'] ?? '')) {
+        $error = "Your session expired. Please refresh the page and try again.";
+    } elseif (empty($name) || empty($email) || empty($password)) {
         $error = "All fields are required.";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = "Please enter a valid Gmail address.";
+        $error = "Please enter a valid email address.";
     } elseif (strlen($password) < 6) {
         $error = "Password must be at least 6 characters long.";
     } else {
@@ -115,6 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php endif; ?>
 
                 <form method="POST" action="" id="signupForm" novalidate>
+                    <?php echo csrf_field(); ?>
                     <div class="input-group">
                         <label for="name">Full Name</label>
                         <div class="input-wrapper">
@@ -130,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
 
                     <div class="input-group">
-                        <label for="email">Gmail Address</label>
+                        <label for="email">Email Address</label>
                         <div class="input-wrapper">
                             <span class="input-icon">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -138,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <polyline points="22,6 12,13 2,6"></polyline>
                                 </svg>
                             </span>
-                            <input type="email" id="email" name="email" placeholder="yourname@gmail.com" 
+                            <input type="email" id="email" name="email" placeholder="you@example.com"
                                    value="<?php echo htmlspecialchars($email ?? ''); ?>" required>
                         </div>
                     </div>

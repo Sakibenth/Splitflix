@@ -1,3 +1,4 @@
+-- LEGACY / HISTORICAL SCRIPT - use sql/full_setup.sql or sql/migrate_v2.sql.
 USE splitflix;
 ALTER TABLE subscription_group DROP FOREIGN KEY subscription_group_ibfk_3;
 ALTER TABLE subscription_group DROP COLUMN plan_id;

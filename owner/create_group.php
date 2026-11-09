@@ -2,6 +2,7 @@
 session_start();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../assets/includes/icons.php';
+require_once __DIR__ . '/../assets/includes/security.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../auth/login.php");
@@ -43,16 +44,20 @@ if (!$platform) {
 $error = '';
 $success = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $plan_name = trim($_POST['plan_name']);
-    $group_name = trim($_POST['group_name']);
-    $group_description = trim($_POST['group_description']);
-    $max_members = (int)$_POST['max_members'];
-    $cost_per_member = (float)$_POST['cost_per_member'];
-    $validity_start = $_POST['validity_start'];
-    $validity_end = $_POST['validity_end'];
+    $plan_name = trim($_POST['plan_name'] ?? '');
+    $group_name = trim($_POST['group_name'] ?? '');
+    $group_description = trim($_POST['group_description'] ?? '');
+    $max_members = (int)($_POST['max_members'] ?? 0);
+    $cost_per_member = (float)($_POST['cost_per_member'] ?? 0);
+    $validity_start = $_POST['validity_start'] ?? '';
+    $validity_end = $_POST['validity_end'] ?? '';
 
-    if (empty($plan_name) || empty($group_name) || empty($validity_start) || empty($validity_end) || $max_members < 1) {
+    if (empty($plan_name) || empty($group_name) || empty($group_description) || empty($validity_start) || empty($validity_end) || $max_members < 1) {
         $error = "Please fill in all required fields.";
+    } elseif (!csrf_validate($_POST['csrf_token'] ?? '')) {
+        $error = "Your session expired. Please refresh the page and try again.";
+    } elseif ($cost_per_member <= 0) {
+        $error = "Price per member must be greater than zero.";
     } elseif ($validity_start > $validity_end) {
         $error = "End date must be after the start date.";
     } else {
@@ -290,6 +295,25 @@ if ($stmt) {
             border: 1px solid rgba(34, 197, 94, 0.2);
         }
 
+        .flash {
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            font-size: 0.92rem;
+            font-weight: 500;
+            border: 1px solid transparent;
+        }
+        .flash-success {
+            background: rgba(34, 197, 94, 0.12);
+            color: #4ade80;
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+        .flash-error {
+            background: rgba(239, 68, 68, 0.12);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
         @media (max-width: 900px) {
             body { flex-direction: column; overflow: auto; }
             .left-panel, .right-panel { width: 100%; height: auto; min-height: 50vh; }
@@ -311,24 +335,20 @@ if ($stmt) {
         </a>
 
         <div class="form-container">
+            <?php echo flash_render(); ?>
             <?php if ($verification_status !== 'verified'): ?>
             <div class="verification-banner" style="background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.3); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem;">
                 <h3 style="color: #eab308; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">⚠️ Verify Your Identity</h3>
                 <p style="color: #bbbbcc; font-size: 0.9rem; margin-bottom: 1.25rem;">Verify your profile to build trust with members. Unverified owners will be marked as "Unverified" when users browse your group.</p>
-                
-                <?php if (isset($_GET['verify_error'])): ?>
-                    <div class="alert alert-error" style="padding: 10px; margin-bottom: 10px; border-radius: 8px; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); font-size: 0.9rem;">
-                        <?php echo htmlspecialchars($_GET['verify_error']); ?>
-                    </div>
-                <?php endif; ?>
-                
+
                 <?php if (isset($_GET['verified']) && $_GET['verified'] == 1): ?>
                     <div class="alert alert-success" style="padding: 10px; margin-bottom: 10px; border-radius: 8px; background: rgba(34, 197, 94, 0.1); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.2); font-size: 0.9rem;">
                         Profile verified successfully!
                     </div>
                 <?php else: ?>
                     <form action="verify_profile.php" method="POST" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 1rem;">
-                        <input type="hidden" name="redirect_to" value="create_group.php?platform_id=<?php echo $platform_id; ?>">
+                        <?php echo csrf_field(); ?>
+                        <input type="hidden" name="redirect_to" value="create_group.php?platform_id=<?php echo (int)$platform_id; ?>">
                         <div class="form-group" style="margin-bottom: 0;">
                             <label for="phone" style="font-size: 0.85rem; color: #f0f0f5;">Phone Number</label>
                             <input type="text" id="phone" name="phone" placeholder="+880..." required style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.2); color: white; font-family: inherit;">
@@ -365,6 +385,7 @@ if ($stmt) {
                 </div>
             <?php else: ?>
                 <form action="create_group.php?platform_id=<?php echo $platform_id; ?>" method="POST">
+                    <?php echo csrf_field(); ?>
                     
                     <div class="form-group">
                         <label for="group_name">Group Name</label>

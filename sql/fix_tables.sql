@@ -1,4 +1,5 @@
 -- Fix: Recreate all related tables with consistent charset
+-- LEGACY / HISTORICAL SCRIPT - use sql/full_setup.sql for new installs.
 USE splitflix;
 
 SET FOREIGN_KEY_CHECKS = 0;

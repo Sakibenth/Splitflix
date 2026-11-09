@@ -2,6 +2,8 @@
 session_start();
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../assets/includes/icons.php';
+require_once __DIR__ . '/../assets/includes/security.php';
+require_once __DIR__ . '/../assets/includes/membership.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../auth/login.php");
@@ -23,6 +25,9 @@ if (!$user_check_res || !$user_row = mysqli_fetch_assoc($user_check_res)) {
 $verification_status = $user_row['verification_status'];
 mysqli_stmt_close($user_check_stmt);
 
+// Apply any leaves that reached their scheduled date
+process_due_leaves($conn);
+
 // Fetch platforms for the "Create Group" panels
 $platforms = [];
 $query = "SELECT * FROM platforms ORDER BY platform_name ASC";
@@ -36,7 +41,7 @@ if ($result) {
 // Fetch owner's existing groups
 $my_groups = [];
 $groups_query = "
-    SELECT sg.*, p.platform_name, p.logo_emoji, p.brand_color 
+    SELECT sg.*, p.platform_name, p.brand_color
     FROM subscription_group sg
     JOIN platforms p ON sg.platform_id = p.platform_id
     WHERE sg.owner_id = ?
@@ -239,15 +244,14 @@ if ($groups_result) {
     <!-- Top Nav -->
     <nav class="top-nav">
         <div class="nav-brand">
-            <a href="../auth/logout.php" class="nav-brand-link">
+            <a href="dashboard.php" class="nav-brand-link">
                 <span class="nav-logo">🎬</span>
                 <span class="nav-title">Splitflix</span>
             </a>
         </div>
         <div class="nav-links">
             <a href="dashboard.php" class="nav-link active">My Groups</a>
-            <a href="#" class="nav-link">Requests</a>
-            <a href="#" class="nav-link">Revenue</a>
+            <a href="../auth/logout.php" class="nav-link">Logout</a>
         </div>
     </nav>
 
@@ -263,16 +267,15 @@ if ($groups_result) {
             <div class="alert-success">Profile verified successfully!</div>
         <?php endif; ?>
 
+        <?php echo flash_render(); ?>
+
         <?php if ($verification_status !== 'verified'): ?>
             <div class="verification-card">
                 <h3>⚠️ Verify Your Identity</h3>
                 <p>To build trust with members and show a verified badge on your groups, please upload a photo of your ID card and provide your phone number.</p>
-                
-                <?php if (isset($_GET['verify_error'])): ?>
-                    <div class="alert-error"><?php echo htmlspecialchars($_GET['verify_error']); ?></div>
-                <?php endif; ?>
 
                 <form action="verify_profile.php" method="POST" enctype="multipart/form-data" class="verification-form">
+                    <?php echo csrf_field(); ?>
                     <div class="form-group">
                         <label for="phone">Phone Number</label>
                         <input type="text" id="phone" name="phone" placeholder="+880..." required>
@@ -320,7 +323,7 @@ if ($groups_result) {
             <?php endforeach; ?>
         </div>
 
-        <h2 class="section-title">My Active Groups</h2>
+        <h2 class="section-title">My Groups</h2>
         <div class="my-groups-list">
             <?php if (empty($my_groups)): ?>
                 <div class="empty-state" style="padding: 2rem 1rem;">

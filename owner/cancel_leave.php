@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../assets/includes/security.php';
 
 header('Content-Type: application/json');
 
@@ -9,9 +10,18 @@ if (!isset($_SESSION['user_id']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
-$owner_id      = $_SESSION['user_id'];
-$membership_id = (int)$_POST['membership_id'];
-$group_id      = (int)$_POST['group_id'];
+if (!csrf_validate($_POST['csrf_token'] ?? '')) {
+    csrf_abort_json();
+}
+
+$owner_id      = (int)$_SESSION['user_id'];
+$membership_id = isset($_POST['membership_id']) ? (int)$_POST['membership_id'] : 0;
+$group_id      = isset($_POST['group_id']) ? (int)$_POST['group_id'] : 0;
+
+if (!$membership_id || !$group_id) {
+    echo json_encode(['success' => false, 'error' => 'Invalid parameters']);
+    exit();
+}
 
 // Verify this owner owns the group
 $check = "SELECT group_id FROM subscription_group WHERE group_id = ? AND owner_id = ?";
